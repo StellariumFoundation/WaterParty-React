@@ -1,4 +1,4 @@
-name: React Native CI Build
+name: Mobile CI Build (Capacitor)
 
 on:
   push:
@@ -7,9 +7,37 @@ on:
     branches: [ main, master ]
 
 jobs:
-  # -- ANDROID BUILD --
+  # -- WEB STATIC BUILD --
+  web-build:
+    name: Build Web App
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Build Web (Vite)
+        run: npm run build
+
+      - name: Upload Web Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: dist/
+          retention-days: 7
+
+  # -- ANDROID CAPACITOR BUILD --
   android-build:
     name: Build Android APK
+    needs: web-build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -30,10 +58,16 @@ jobs:
       - name: Install Dependencies
         run: npm install
 
-      - name: Generate Android Native Code (Expo Prebuild)
-        # This generates the /android folder if you are using an Expo managed project.
-        # If the project is already bare React Native, this will gracefully skip or update.
-        run: npx expo prebuild --platform android --clean || true
+      - name: Download Web Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: dist/
+
+      - name: Sync Capacitor Android
+        run: |
+          npx cap add android || true
+          npx cap sync android
 
       - name: Build Android APK (Release)
         run: |
@@ -48,9 +82,10 @@ jobs:
           path: android/app/build/outputs/apk/release/app-release.apk
           retention-days: 7
 
-  # -- IOS BUILD --
+  # -- IOS CAPACITOR BUILD --
   ios-build:
     name: Build iOS App
+    needs: web-build
     runs-on: macos-latest
     steps:
       - name: Checkout repository
@@ -65,55 +100,31 @@ jobs:
       - name: Install Dependencies
         run: npm install
 
-      - name: Generate iOS Native Code (Expo Prebuild)
-        # This generates the /ios folder for Expo projects.
-        run: npx expo prebuild --platform ios --clean || true
+      - name: Download Web Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: dist/
+          
+      - name: Sync Capacitor iOS
+        run: |
+          npx cap add ios || true
+          npx cap sync ios
 
       - name: Install CocoaPods
         run: |
-          cd ios
+          cd ios/App
           pod install
 
       - name: Build iOS App (Simulator Debug)
-        # Note: A release build (.ipa) for physical iOS devices requires Apple Certificates and Provisioning Profiles.
-        # This workflow compiles a simulator build to verify iOS compilation steps pass.
         run: |
-          cd ios
-          WORKSPACE=$(ls | grep .xcworkspace | head -1)
-          SCHEME=$(echo $WORKSPACE | sed 's/.xcworkspace//')
-          xcodebuild -workspace "$WORKSPACE" -scheme "$SCHEME" -configuration Debug -sdk iphonesimulator build -derivedDataPath build
+          cd ios/App
+          xcodebuild -workspace "App.xcworkspace" -scheme "App" -configuration Debug -sdk iphonesimulator build -derivedDataPath build
 
       - name: Upload iOS App Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ios-simulator-app
-          path: ios/build/Build/Products/Debug-iphonesimulator/*.app
+          path: ios/App/build/Build/Products/Debug-iphonesimulator/*.app
           retention-days: 7
 
-  # -- WEB BUILD --
-  web-build:
-    name: Build Web App
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          cache: 'npm'
-
-      - name: Install Dependencies
-        run: npm install
-
-      - name: Build Web
-        # For Expo web or Vite web builds
-        run: npm run build
-
-      - name: Upload Web Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: web-build
-          path: dist/ # Adjust to 'web-build' depending on your bundler (Vite=dist, Expo=web-build)
-          retention-days: 7
