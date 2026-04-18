@@ -1,11 +1,36 @@
-import { Briefcase, GraduationCap, User as UserIcon, Instagram, Twitter, Edit } from 'lucide-react';
+import { useState } from 'react';
+import { Briefcase, GraduationCap, User as UserIcon, Instagram, Twitter, Edit, Save, Camera, X } from 'lucide-react';
 import { useStore } from '../lib/Store';
 import { getAssetUrl } from '../lib/constants';
 
 export function ProfilePage() {
-  const { user, logout } = useStore();
+  const { user, logout, sendSocketMessage } = useStore();
+  const [isEditing, setIsEditing] = useState(false);
+  const [editData, setEditData] = useState({
+    RealName: '',
+    Bio: '',
+    Thumbnail: ''
+  });
 
   if (!user) return null;
+
+  const handleEditClick = () => {
+    setEditData({
+      RealName: user.RealName || '',
+      Bio: user.Bio || '',
+      Thumbnail: user.Thumbnail || ''
+    });
+    setIsEditing(true);
+  };
+
+  const handleSave = () => {
+    sendSocketMessage('UPDATE_PROFILE', {
+      RealName: editData.RealName,
+      Bio: editData.Bio,
+      Thumbnail: editData.Thumbnail
+    });
+    setIsEditing(false);
+  };
 
   const displayImage = user.ProfilePhotos?.length > 0 
       ? getAssetUrl(user.ProfilePhotos[0]) 
@@ -17,7 +42,7 @@ export function ProfilePage() {
       {/* Hero Image Section */}
       <div className="relative h-80 w-full shrink-0">
          <img 
-            src={displayImage} 
+            src={isEditing && editData.Thumbnail ? editData.Thumbnail : displayImage} 
             alt="Profile" 
             className="w-full h-full object-cover mix-blend-overlay opacity-80"
          />
@@ -38,18 +63,52 @@ export function ProfilePage() {
 
       <div className="px-6 -mt-4 relative z-10 space-y-8 pb-24">
          
-         {/* Name */}
+         {/* Name & Bio */}
          <div>
-            <h1 className="text-4xl font-bold text-white mb-6 tracking-tight">{user.RealName}</h1>
-            
-            <h3 className="text-[10px] font-bold text-white/40 tracking-wider mb-2 uppercase">About Me</h3>
-            <p className="text-sm text-white/80 leading-relaxed">
-              {user.Bio || "No bio added yet."}
-            </p>
+            {isEditing ? (
+              <div className="space-y-4 mb-6">
+                 <div>
+                   <label className="text-[10px] font-bold text-white/40 tracking-wider mb-2 uppercase block">Full Name</label>
+                   <input 
+                     type="text" 
+                     value={editData.RealName}
+                     onChange={(e) => setEditData({...editData, RealName: e.target.value})}
+                     className="w-full bg-[#11131F] border border-white/10 rounded-xl px-4 py-3 text-white focus:border-brand-primary outline-none transition-colors"
+                   />
+                 </div>
+                 <div>
+                   <label className="text-[10px] font-bold text-white/40 tracking-wider mb-2 uppercase block">Profile Image URL</label>
+                   <input 
+                     type="text" 
+                     value={editData.Thumbnail}
+                     onChange={(e) => setEditData({...editData, Thumbnail: e.target.value})}
+                     className="w-full bg-[#11131F] border border-white/10 rounded-xl px-4 py-3 text-white focus:border-brand-primary outline-none transition-colors text-sm"
+                     placeholder="https://..."
+                   />
+                 </div>
+                 <div>
+                   <label className="text-[10px] font-bold text-white/40 tracking-wider mb-2 uppercase block">Bio</label>
+                   <textarea 
+                     value={editData.Bio}
+                     onChange={(e) => setEditData({...editData, Bio: e.target.value})}
+                     className="w-full bg-[#11131F] border border-white/10 rounded-xl px-4 py-3 text-white focus:border-brand-primary outline-none transition-colors min-h-[100px]"
+                   />
+                 </div>
+              </div>
+            ) : (
+              <>
+                 <h1 className="text-4xl font-bold text-white mb-6 tracking-tight">{user.RealName}</h1>
+                 
+                 <h3 className="text-[10px] font-bold text-white/40 tracking-wider mb-2 uppercase">About Me</h3>
+                 <p className="text-sm text-white/80 leading-relaxed">
+                   {user.Bio || "No bio added yet."}
+                 </p>
+              </>
+            )}
          </div>
 
          {/* Lifestyle */}
-         {(user.Gender || user.HeightCm > 0) && (
+         {!isEditing && (user.Gender || user.HeightCm > 0) && (
            <section>
               <h3 className="text-[10px] font-bold text-white/40 tracking-wider mb-3 uppercase">Lifestyle</h3>
               <div className="space-y-3">
@@ -77,7 +136,7 @@ export function ProfilePage() {
          )}
 
          {/* Work & Ed */}
-         {(user.JobTitle || user.School) && (
+         {!isEditing && (user.JobTitle || user.School) && (
            <section>
               <h3 className="text-[10px] font-bold text-white/40 tracking-wider mb-3 uppercase">Work & Education</h3>
               <div className="space-y-3">
@@ -99,14 +158,27 @@ export function ProfilePage() {
 
          {/* Buttons */}
          <div className="pt-4 space-y-4">
-            <button className="w-full py-4 rounded-full bg-gradient-to-r from-brand-primary to-brand-secondary text-white font-bold text-sm tracking-wide shadow-lg shadow-brand-secondary/20 active:scale-95 transition-transform flex items-center justify-center gap-2">
-               <Edit size={16} /> EDIT PROFILE
-            </button>
-            <div className="flex gap-4">
-               <button onClick={logout} className="flex-1 py-4 bg-[#11131F] border border-white/5 rounded-full text-white/60 text-xs font-bold tracking-wider hover:bg-white/5 transition-colors">
-                  LOGOUT
-               </button>
-            </div>
+            {isEditing ? (
+              <div className="flex gap-4">
+                <button onClick={() => setIsEditing(false)} className="flex-[0.3] py-4 bg-white/5 border border-white/10 rounded-full text-white font-bold text-sm tracking-wide active:scale-95 transition-transform flex items-center justify-center">
+                   <X size={20} />
+                </button>
+                <button onClick={handleSave} className="flex-1 py-4 rounded-full bg-gradient-to-r from-brand-primary to-brand-secondary text-white font-bold text-sm tracking-wide shadow-lg shadow-brand-secondary/20 active:scale-95 transition-transform flex items-center justify-center gap-2">
+                   <Save size={18} /> SAVE CHANGES
+                </button>
+              </div>
+            ) : (
+              <button onClick={handleEditClick} className="w-full py-4 rounded-full bg-gradient-to-r from-brand-primary to-brand-secondary text-white font-bold text-sm tracking-wide shadow-lg shadow-brand-secondary/20 active:scale-95 transition-transform flex items-center justify-center gap-2">
+                 <Edit size={16} /> EDIT PROFILE
+              </button>
+            )}
+            {!isEditing && (
+              <div className="flex gap-4">
+                 <button onClick={logout} className="flex-1 py-4 bg-[#11131F] border border-white/5 rounded-full text-brand-primary text-xs font-bold tracking-wider hover:bg-white/5 transition-colors">
+                    LOGOUT
+                 </button>
+              </div>
+            )}
          </div>
 
       </div>

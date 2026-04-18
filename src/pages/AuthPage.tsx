@@ -50,8 +50,8 @@ export function AuthPage() {
   return (
     <div className="h-[100dvh] w-full flex flex-col items-center justify-center p-8 bg-gradient-to-b from-[#1A1A24] to-[#0F0F13] text-white absolute inset-0 z-[100]">
       <Waves size={64} className="text-brand-accent mb-6" />
-      <h1 className="text-3xl font-black tracking-[0.2em] mb-2 uppercase">Water Party</h1>
-      <p className="text-xs tracking-[0.3em] text-brand-primary mb-12 uppercase font-bold px-4 py-2 rounded-full border border-brand-primary/30 bg-brand-primary/10">Find Your Vibe</p>
+      <h1 className="text-3xl font-black tracking-[0.2em] mb-2 uppercase">WaterParty</h1>
+      <p className="text-xs tracking-[0.3em] text-brand-primary mb-12 uppercase font-bold px-4 py-2 rounded-full border border-brand-primary/30 bg-brand-primary/10">Find Your Party</p>
 
       <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4 relative z-10">
          {!isLogin && (
@@ -66,6 +66,7 @@ export function AuthPage() {
                 value={name}
                 onChange={e => setName(e.target.value)}
                 className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm font-bold placeholder:text-white/20 outline-none focus:border-brand-accent transition-colors"
+                autoComplete="name"
               />
             </div>
          )}
@@ -74,12 +75,13 @@ export function AuthPage() {
               <Mail size={18} className="text-white/20" />
             </div>
             <input
-              type="email"
+              type="text"
               required
-              placeholder="EMAIL"
+              placeholder="EMAIL OR USERNAME"
               value={email}
               onChange={e => setEmail(e.target.value)}
               className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm font-bold placeholder:text-white/20 outline-none focus:border-brand-accent transition-colors"
+              autoComplete="username"
             />
          </div>
          <div className="relative">
@@ -93,6 +95,7 @@ export function AuthPage() {
               value={password}
               onChange={e => setPassword(e.target.value)}
               className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm font-bold placeholder:text-white/20 outline-none focus:border-brand-accent transition-colors"
+              autoComplete="current-password"
             />
          </div>
 
