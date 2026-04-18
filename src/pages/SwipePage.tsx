@@ -78,7 +78,7 @@ export function SwipePage() {
                 <motion.div
                   key={party.ID}
                   className={cn(
-                    "absolute inset-x-2 inset-y-2 rounded-[32px] overflow-hidden shadow-[0_10px_40px_rgba(0,0,0,0.5)] bg-[#222]",
+                    "absolute inset-x-2 top-2 bottom-24 rounded-[32px] overflow-hidden shadow-[0_10px_40px_rgba(0,0,0,0.5)] bg-[#222]",
                     !isTop && "pointer-events-none"
                   )}
                   style={{ zIndex: index }}

@@ -6,8 +6,13 @@ import { Waves, Mail, Lock } from 'lucide-react';
 export function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('demo@example.com');
-  const [password, setPassword] = useState('password123');
+  const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [photoUrl, setPhotoUrl] = useState('');
+  const [bio, setBio] = useState('');
+  const [instagram, setInstagram] = useState('');
+  const [twitter, setTwitter] = useState('');
+
   const { login } = useStore();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -15,12 +20,26 @@ export function AuthPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    
+    if (!isLogin && password.length < 8) {
+       setError('Password must be at least 8 characters long');
+       return;
+    }
+
     setLoading(true);
 
     const endpoint = isLogin ? '/login' : '/register';
     const body = isLogin ? { email, password } : {
         password,
-        user: { RealName: name, Email: email, ProfilePhotos: [] }
+        user: { 
+           RealName: name, 
+           Email: email, 
+           ProfilePhotos: photoUrl ? [photoUrl] : [],
+           Thumbnail: photoUrl || '',
+           Bio: bio,
+           Instagram: instagram,
+           Twitter: twitter
+        }
     };
 
     try {
@@ -55,6 +74,7 @@ export function AuthPage() {
 
       <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4 relative z-10">
          {!isLogin && (
+            <div className="space-y-4">
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                 <span className="text-white/20 text-lg">👤</span>
@@ -68,6 +88,69 @@ export function AuthPage() {
                 className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm font-bold placeholder:text-white/20 outline-none focus:border-brand-accent transition-colors"
                 autoComplete="name"
               />
+            </div>
+            
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <span className="text-white/20 text-lg">📷</span>
+              </div>
+              <div 
+                 onClick={() => {
+                   const fileInput = document.createElement('input');
+                   fileInput.type = 'file';
+                   fileInput.accept = 'image/*';
+                   fileInput.onchange = (e: any) => {
+                     const file = e.target.files?.[0];
+                     if (file) {
+                       const reader = new FileReader();
+                       reader.onloadend = () => setPhotoUrl(reader.result as string);
+                       reader.readAsDataURL(file);
+                     }
+                   };
+                   fileInput.click();
+                 }}
+                 className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm font-bold text-white/50 cursor-pointer hover:bg-white/10 transition-colors flex items-center justify-between"
+              >
+                 {photoUrl ? "PHOTO ATTACHED ✅" : "UPLOAD PROFILE PHOTO"}
+              </div>
+            </div>
+
+            <div className="relative">
+              <textarea
+                placeholder="BIO (Tell us about yourself)"
+                value={bio}
+                onChange={e => setBio(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-4 text-sm font-bold placeholder:text-white/20 outline-none focus:border-brand-accent transition-colors min-h-[80px]"
+              />
+            </div>
+            
+            <div className="flex gap-2">
+               <div className="relative flex-1">
+                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                   <span className="text-white/20">ig</span>
+                 </div>
+                 <input
+                   type="text"
+                   placeholder="INSTAGRAM"
+                   value={instagram}
+                   onChange={e => setInstagram(e.target.value)}
+                   className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-10 pr-4 text-sm font-bold placeholder:text-white/20 outline-none focus:border-brand-accent transition-colors"
+                 />
+               </div>
+               
+               <div className="relative flex-1">
+                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                   <span className="text-white/20">x</span>
+                 </div>
+                 <input
+                   type="text"
+                   placeholder="TWITTER"
+                   value={twitter}
+                   onChange={e => setTwitter(e.target.value)}
+                   className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-10 pr-4 text-sm font-bold placeholder:text-white/20 outline-none focus:border-brand-accent transition-colors"
+                 />
+               </div>
+            </div>
             </div>
          )}
          <div className="relative">

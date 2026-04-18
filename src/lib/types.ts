@@ -12,6 +12,8 @@ export interface User {
   Company: string;
   School: string;
   Degree: string;
+  Instagram?: string;
+  Twitter?: string;
   TrustScore: number;
   Thumbnail: string;
 }

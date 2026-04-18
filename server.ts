@@ -3,7 +3,7 @@ import { createServer as createViteServer } from "vite";
 import { WebSocketServer } from "ws";
 import http from "http";
 import path from "path";
-import crypto from "crypto";
+import bcrypt from "bcryptjs";
 import { DatabaseSync } from "node:sqlite";
 
 // Setup DB
@@ -17,7 +17,15 @@ db.exec(`
     ProfilePhotos TEXT,
     TrustScore REAL,
     Thumbnail TEXT,
-    Bio TEXT
+    Bio TEXT,
+    Instagram TEXT,
+    Twitter TEXT,
+    Gender TEXT,
+    HeightCm REAL,
+    JobTitle TEXT,
+    Company TEXT,
+    School TEXT,
+    Degree TEXT
   );
   CREATE TABLE IF NOT EXISTS parties (
     ID TEXT PRIMARY KEY,
@@ -113,15 +121,14 @@ async function startServer() {
   const getUserStmt = db.prepare('SELECT * FROM users WHERE Email = ?');
   const getUserByIdStmt = db.prepare('SELECT * FROM users WHERE ID = ?');
   const insertUserStmt = db.prepare(
-    'INSERT INTO users (ID, RealName, Email, Password, ProfilePhotos, TrustScore, Thumbnail, Bio) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    'INSERT INTO users (ID, RealName, Email, Password, ProfilePhotos, TrustScore, Thumbnail, Bio, Instagram, Twitter, Gender, HeightCm, JobTitle, Company, School, Degree) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
   );
-
-  const hashPwd = (pw: string) => crypto.createHash('sha256').update(pw).digest('hex');
 
   app.post('/login', (req, res) => {
     const { email, password } = req.body;
     let userRow = getUserStmt.get(email);
-    if (!userRow || userRow.Password !== hashPwd(password)) {
+    
+    if (!userRow || !bcrypt.compareSync(password, userRow.Password)) {
        return res.status(401).json({ error: "Invalid username or password" });
     }
     const safeUser = { ...userRow };
@@ -131,14 +138,21 @@ async function startServer() {
 
   app.post('/register', (req, res) => {
     const { user, password } = req.body;
+    
+    if (!password || password.length < 8) {
+       return res.status(400).json({ error: "Password must be at least 8 characters long" });
+    }
+    
     const existingRow = getUserStmt.get(user.Email);
     if (existingRow) {
        return res.status(400).json({ error: "User already exists with this email" });
     }
 
     const newID = 'user_' + Date.now();
+    const hash = bcrypt.hashSync(password, 10);
+    
     insertUserStmt.run(
-      newID, user.RealName, user.Email, hashPwd(password), JSON.stringify(user.ProfilePhotos || []), 100, user.Thumbnail || '', user.Bio || ''
+      newID, user.RealName, user.Email, hash, JSON.stringify(user.ProfilePhotos || []), 100, user.Thumbnail || '', user.Bio || '', user.Instagram || '', user.Twitter || '', user.Gender || '', user.HeightCm || 0, user.JobTitle || '', user.Company || '', user.School || '', user.Degree || ''
     );
     const userRow = getUserByIdStmt.get(newID);
     const safeUser = { ...userRow };
@@ -181,7 +195,7 @@ async function startServer() {
      VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
   const getPartyByIdStmt = db.prepare('SELECT * FROM parties WHERE ID = ?');
-  const updateUserStmt = db.prepare('UPDATE users SET RealName = ?, Bio = ?, Thumbnail = ? WHERE ID = ?');
+  const updateUserStmt = db.prepare('UPDATE users SET RealName = ?, Bio = ?, Thumbnail = ?, ProfilePhotos = ?, Instagram = ?, Twitter = ?, Gender = ?, HeightCm = ?, JobTitle = ?, Company = ?, School = ?, Degree = ? WHERE ID = ?');
 
   wss.on('connection', (ws, req) => {
     ws.on('message', (message) => {
@@ -240,7 +254,21 @@ async function startServer() {
                break;
              }
              case 'UPDATE_PROFILE': {
-               updateUserStmt.run(Payload.RealName, Payload.Bio, Payload.Thumbnail, Token);
+               updateUserStmt.run(
+                   Payload.RealName, 
+                   Payload.Bio, 
+                   Payload.Thumbnail, 
+                   JSON.stringify(Payload.ProfilePhotos || (Payload.Thumbnail ? [Payload.Thumbnail] : [])), 
+                   Payload.Instagram || '', 
+                   Payload.Twitter || '', 
+                   Payload.Gender || '',
+                   Payload.HeightCm || 0,
+                   Payload.JobTitle || '',
+                   Payload.Company || '',
+                   Payload.School || '',
+                   Payload.Degree || '',
+                   Token
+               );
                const updatedUser = getUserByIdStmt.get(Token);
                if(updatedUser) send('PROFILE_UPDATED', mapUser(updatedUser));
                break;
