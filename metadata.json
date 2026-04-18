@@ -1,0 +1,6 @@
+{
+  "name": "Vibes - Party Finder",
+  "description": "A Tinder-like app for finding and matching with nearby parties.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": []
+}
