@@ -230,7 +230,7 @@ async function startServer() {
              }
              case 'GET_FEED': {
                const dbParties = getPartiesStmt.all();
-               send('FEED_UPDATE', dbParties.map(mapParty).filter((p: any) => p.HostID !== Token));
+               send('FEED_UPDATE', dbParties.map(mapParty));
                break;
              }
              case 'SWIPE':

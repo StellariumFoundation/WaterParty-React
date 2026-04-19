@@ -6,7 +6,7 @@ import { useStore } from '../lib/Store';
 import { getAssetUrl } from '../lib/constants';
 
 export function SwipePage() {
-  const { feed, sendSocketMessage, removeFromFeed } = useStore();
+  const { feed, user, sendSocketMessage, removeFromFeed } = useStore();
   const [swipeDir, setSwipeDir] = useState<{ [key: string]: 'left' | 'right' | null }>({});
 
   useEffect(() => {
@@ -25,7 +25,8 @@ export function SwipePage() {
     }
   }, []);
 
-  const activeIndex = feed.length - 1;
+  const swipeFeed = feed.filter(p => p.HostID !== user?.ID);
+  const activeIndex = swipeFeed.length - 1;
 
   const handleSwipe = (dir: 'left' | 'right', partyId: string) => {
     setSwipeDir(prev => ({ ...prev, [partyId]: dir }));
@@ -52,7 +53,7 @@ export function SwipePage() {
 
       {/* Cards Container */}
       <div className="flex-1 relative flex items-center justify-center p-4">
-        {feed.length === 0 ? (
+        {swipeFeed.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full space-y-4 animate-in fade-in zoom-in duration-500">
             <Waves size={48} className="text-brand-accent opacity-80" />
             <div className="text-center">
@@ -62,7 +63,7 @@ export function SwipePage() {
           </div>
         ) : (
           <AnimatePresence>
-            {feed.map((party, index) => {
+            {swipeFeed.map((party, index) => {
               const isTop = index === activeIndex;
               const displayImage = party.PartyPhotos?.length > 0
                 ? getAssetUrl(party.PartyPhotos[0])

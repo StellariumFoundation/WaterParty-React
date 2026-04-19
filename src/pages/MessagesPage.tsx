@@ -64,7 +64,7 @@ export function MessagesPage() {
                   
                   const getETA = () => {
                     if (!chat.IsGroup) return 'DIRECT';
-                    if (!associatedParty?.StartTime) return 'SYNCED';
+                    if (!associatedParty?.StartTime) return 'TIME TBD';
                     
                     const start = new Date(associatedParty.StartTime);
                     const now = new Date();
@@ -123,7 +123,7 @@ export function MessagesPage() {
                               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/5">
                                  <MapPin size={10} className="text-brand-accent" />
                                  <span className="text-[9px] font-black text-white/60 uppercase tracking-tighter truncate max-w-[80px]">
-                                    {associatedParty.City || "SYNCED"}
+                                    {associatedParty.City || "LOCATION TBD"}
                                  </span>
                               </div>
                               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/5 ml-auto">

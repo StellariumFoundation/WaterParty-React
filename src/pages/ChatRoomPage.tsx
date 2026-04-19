@@ -197,7 +197,7 @@ export function ChatRoomPage() {
                       <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5">
                          <MapPin className="text-brand-accent mb-3" size={18} />
                          <p className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-1">Vibe City</p>
-                         <p className="text-xs font-bold text-white uppercase">{associatedParty?.City || 'SYNCED'}</p>
+                         <p className="text-xs font-bold text-white uppercase">{associatedParty?.City || 'LOCATION TBD'}</p>
                       </div>
                       <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5">
                          <Users className="text-brand-accent mb-3" size={18} />
