@@ -16,6 +16,9 @@ export interface User {
   Twitter?: string;
   TrustScore: number;
   Thumbnail: string;
+  HostedCount?: number;
+  HostingRating?: number;
+  Reach?: number;
 }
 
 export interface Party {

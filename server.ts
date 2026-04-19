@@ -8,6 +8,21 @@ import { DatabaseSync } from "node:sqlite";
 
 // Setup DB
 const db = new DatabaseSync('./database.sqlite');
+
+// Helper to check if a column exists and add it if missing
+function ensureColumn(tableName: string, columnName: string, columnDef: string) {
+  try {
+    const info = db.prepare(`PRAGMA table_info(${tableName})`).all() as any[];
+    const exists = info.some(col => col.name === columnName);
+    if (!exists) {
+      db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnDef}`);
+      console.log(`Migration: Added column ${columnName} to ${tableName}`);
+    }
+  } catch (e) {
+    console.error(`Migration failed for ${tableName}.${columnName}`, e);
+  }
+}
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     ID TEXT PRIMARY KEY,
@@ -27,6 +42,31 @@ db.exec(`
     School TEXT,
     Degree TEXT
   );
+`);
+
+// MIGRATIONS: Add new columns if they don't exist
+ensureColumn('users', 'HostedCount', 'INTEGER DEFAULT 0');
+ensureColumn('users', 'HostingRating', 'REAL DEFAULT 0');
+ensureColumn('users', 'Reach', 'INTEGER DEFAULT 0');
+
+db.exec(`
+  -- Seed high-fidelity demo data for hosts if they exist (based on names in screenshot)
+  UPDATE users SET 
+    Gender = 'Male',
+    HeightCm = 185,
+    JobTitle = 'Experience Designer',
+    Company = 'Club Stellar',
+    School = 'School of Social Arts',
+    Degree = 'Master of Vibes',
+    Instagram = 'stellar_foundation',
+    Twitter = 'stellar_x',
+    Bio = 'Curating the most exclusive rooftop and underground experiences in the city. Join the foundation for a night you won''t forget.',
+    ProfilePhotos = '["https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=400", "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=400", "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?q=80&w=400"]',
+    HostedCount = 24,
+    HostingRating = 99.2,
+    Reach = 15400
+  WHERE RealName LIKE '%Stellar%';
+
   CREATE TABLE IF NOT EXISTS parties (
     ID TEXT PRIMARY KEY,
     HostID TEXT,
@@ -90,7 +130,6 @@ function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
 const mapUser = (row: any) => ({ ...row, ProfilePhotos: parseJSON(row.ProfilePhotos) });
 const mapParty = (row: any) => ({ ...row, PartyPhotos: parseJSON(row.PartyPhotos), VibeTags: parseJSON(row.VibeTags), Rules: parseJSON(row.Rules) });
 const mapChat = (row: any) => ({ ...row, RecentMessages: parseJSON(row.RecentMessages), ParticipantIDs: parseJSON(row.ParticipantIDs), IsGroup: Boolean(row.IsGroup) });
-const mapRegistration = (row: any) => ({ ...row });
 
 function getEnrichedParties(db: any) {
   const parties = db.prepare('SELECT * FROM parties').all().map(mapParty);
@@ -114,7 +153,7 @@ async function startServer() {
   const getUserStmt = db.prepare('SELECT * FROM users WHERE Email = ?');
   const getUserByIdStmt = db.prepare('SELECT * FROM users WHERE ID = ?');
   const insertUserStmt = db.prepare(
-    'INSERT INTO users (ID, RealName, Email, Password, ProfilePhotos, TrustScore, Thumbnail, Bio, Instagram, Twitter, Gender, HeightCm, JobTitle, Company, School, Degree) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    'INSERT INTO users (ID, RealName, Email, Password, ProfilePhotos, TrustScore, Thumbnail, Bio, Instagram, Twitter, Gender, HeightCm, JobTitle, Company, School, Degree, HostedCount, HostingRating, Reach) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
   );
 
   app.get('/api/users/:id', (req, res) => {
@@ -127,7 +166,7 @@ async function startServer() {
 
   app.post('/login', (req, res) => {
     const { email, password } = req.body;
-    let userRow = getUserStmt.get(email);
+    let userRow = getUserStmt.get(email) as any;
     
     if (!userRow || !bcrypt.compareSync(password, userRow.Password as string)) {
        return res.status(401).json({ error: "Invalid username or password" });
@@ -153,16 +192,12 @@ async function startServer() {
     const hash = bcrypt.hashSync(password, 10);
     
     insertUserStmt.run(
-      newID, user.RealName, user.Email, hash, JSON.stringify(user.ProfilePhotos || []), 100, user.Thumbnail || '', user.Bio || '', user.Instagram || '', user.Twitter || '', user.Gender || '', user.HeightCm || 0, user.JobTitle || '', user.Company || '', user.School || '', user.Degree || ''
+      newID, user.RealName, user.Email, hash, JSON.stringify(user.ProfilePhotos || []), 100, user.Thumbnail || '', user.Bio || '', user.Instagram || '', user.Twitter || '', user.Gender || '', user.HeightCm || 0, user.JobTitle || '', user.Company || '', user.School || '', user.Degree || '', 0, 0, 0
     );
     const userRow = getUserByIdStmt.get(newID);
-    const safeUser = { ...userRow };
+    const safeUser = { ...userRow } as any;
     delete safeUser.Password;
     res.json(mapUser(safeUser));
-  });
-
-  app.get('/assets/:hash', (req, res) => {
-     res.redirect(req.params.hash);
   });
 
   // Vite middleware for development
@@ -186,7 +221,6 @@ async function startServer() {
   const wss = new WebSocketServer({ server, path: '/ws' });
 
   const getChatsStmt = db.prepare('SELECT * FROM chats');
-  const getPartiesStmt = db.prepare('SELECT * FROM parties');
   const insertPartyStmt = db.prepare(`
     INSERT INTO parties (ID, HostID, Title, Description, PartyPhotos, StartTime, DurationHours, Status, Address, City, GeoLat, GeoLon, MaxCapacity, CurrentGuestCount, VibeTags, Rules, ChatRoomID, Thumbnail, CrowdfundTarget, CrowdfundCurrent, PartyType) 
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -196,7 +230,7 @@ async function startServer() {
      VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
   const getPartyByIdStmt = db.prepare('SELECT * FROM parties WHERE ID = ?');
-  const updateUserStmt = db.prepare('UPDATE users SET RealName = ?, Bio = ?, Thumbnail = ?, ProfilePhotos = ?, Instagram = ?, Twitter = ?, Gender = ?, HeightCm = ?, JobTitle = ?, Company = ?, School = ?, Degree = ? WHERE ID = ?');
+  const updateUserStmt = db.prepare('UPDATE users SET RealName = ?, Bio = ?, Thumbnail = ?, ProfilePhotos = ?, Instagram = ?, Twitter = ?, Gender = ?, HeightCm = ?, JobTitle = ?, Company = ?, School = ?, Degree = ?, HostedCount = ?, HostingRating = ?, Reach = ? WHERE ID = ?');
 
   wss.on('connection', (ws, req) => {
     ws.on('message', (message) => {
@@ -210,7 +244,7 @@ async function startServer() {
 
           const broadcast = (ev: string, data: any) => {
              wss.clients.forEach(client => {
-                if (client.readyState === ws.OPEN) {
+                if (client.readyState === 1) { // 1 is OPEN
                    client.send(JSON.stringify({ Event: ev, Payload: data }));
                 }
              })
@@ -218,7 +252,7 @@ async function startServer() {
 
           switch (Event) {
              case 'GET_CHATS': {
-               const allChats = getChatsStmt.all();
+               const allChats = getChatsStmt.all() as any[];
                const userChats = allChats.map(mapChat).filter((c: any) => c.ParticipantIDs?.includes(Token));
                send('CHATS_LIST', userChats);
                break;
@@ -228,8 +262,6 @@ async function startServer() {
                let mappedParties = getEnrichedParties(db);
                
                if (typeof Lat === 'number' && typeof Lon === 'number') {
-                 // Sort such that the CLOSEST party is at the end of the array
-                 // because the frontend renders the last array element on top of the visual stack
                  mappedParties.sort((a: any, b: any) => {
                    const distA = getDistance(Lat, Lon, a.GeoLat || 0, a.GeoLon || 0);
                    const distB = getDistance(Lat, Lon, b.GeoLat || 0, b.GeoLon || 0);
@@ -243,7 +275,6 @@ async function startServer() {
              case 'SWIPE': {
                 const { PartyID, Direction } = Payload;
                 if (Direction === 'right') {
-                   // Create a registration request
                    const regID = `reg_${Date.now()}_${Token}`;
                    const existing = db.prepare('SELECT * FROM registrations WHERE PartyID = ? AND UserID = ?').get(PartyID, Token);
                    if (!existing) {
@@ -255,7 +286,6 @@ async function startServer() {
                 break;
              }
              case 'CREATE_PARTY': {
-               // Server-side validation
                if (!Payload.Title?.trim() || Payload.Title.length < 3) {
                   return send('ERROR', { message: 'Title too short' });
                }
@@ -290,7 +320,6 @@ async function startServer() {
                const pID = 'party_' + Date.now();
                const imgUrl = Payload.PartyPhotos?.[0] || Payload.Thumbnail || '';
                
-               console.log(`[SERVER] Creating party: ${pID} | Title: ${Payload.Title}`);
                insertPartyStmt.run(
                  pID, 
                  Token, 
@@ -322,41 +351,42 @@ async function startServer() {
                const newlyCreatedParty = getPartyByIdStmt.get(pID);
                if (newlyCreatedParty) send('PARTY_CREATED', mapParty(newlyCreatedParty));
 
-               // Broadcast updated feed
                const updatedParties = getEnrichedParties(db);
                broadcast('FEED_UPDATE', updatedParties);
 
-               // Send user their updated chats
-               const updatedChats = getChatsStmt.all();
+               const updatedChats = getChatsStmt.all() as any[];
                send('CHATS_LIST', updatedChats.map(mapChat).filter((c: any) => c.ParticipantIDs?.includes(Token)));
                break;
              }
              case 'UPDATE_PROFILE': {
-               updateUserStmt.run(
-                   Payload.RealName, 
-                   Payload.Bio, 
-                   Payload.Thumbnail, 
-                   JSON.stringify(Payload.ProfilePhotos || (Payload.Thumbnail ? [Payload.Thumbnail] : [])), 
-                   Payload.Instagram || '', 
-                   Payload.Twitter || '', 
-                   Payload.Gender || '',
-                   Payload.HeightCm || 0,
-                   Payload.JobTitle || '',
-                   Payload.Company || '',
-                   Payload.School || '',
-                   Payload.Degree || '',
-                   Token
-               );
-               const updatedUser = getUserByIdStmt.get(Token);
-               if(updatedUser) send('PROFILE_UPDATED', mapUser(updatedUser));
-               break;
+                updateUserStmt.run(
+                    Payload.RealName, 
+                    Payload.Bio, 
+                    Payload.Thumbnail, 
+                    JSON.stringify(Payload.ProfilePhotos || (Payload.Thumbnail ? [Payload.Thumbnail] : [])), 
+                    Payload.Instagram || '', 
+                    Payload.Twitter || '', 
+                    Payload.Gender || '',
+                    Payload.HeightCm || 0,
+                    Payload.JobTitle || '',
+                    Payload.Company || '',
+                    Payload.School || '',
+                    Payload.Degree || '',
+                    Payload.HostedCount || 0,
+                    Payload.HostingRating || 0,
+                    Payload.Reach || 0,
+                    Token
+                );
+                const updatedUser = getUserByIdStmt.get(Token);
+                if(updatedUser) send('PROFILE_UPDATED', mapUser(updatedUser));
+                break;
              }
              case 'CREATE_DM': {
                 const { TargetUserID } = Payload;
                 const me = getUserByIdStmt.get(Token) as any;
                 const other = getUserByIdStmt.get(TargetUserID) as any;
                 if (me && other) {
-                   const allChats = getChatsStmt.all().map(mapChat);
+                   const allChats = getChatsStmt.all().map(mapChat) as any[];
                    const existing = allChats.find((c: any) => c.IsGroup === false && c.ParticipantIDs.includes(Token) && c.ParticipantIDs.includes(TargetUserID));
                    
                    let chatID;
@@ -364,18 +394,12 @@ async function startServer() {
                       chatID = existing.ID;
                    } else {
                       chatID = 'dm_' + Date.now() + '_' + Token + '_' + TargetUserID;
-                      // Avatar logic: For a DM, we can just use empty string or a fallback
                       insertChatWSRoomStmt.run(
                         chatID, 'DM', `${me.RealName} & ${other.RealName}`, '', JSON.stringify([]), 0, JSON.stringify([Token, TargetUserID])
                       );
                    }
-                   // Send everyone updated chats who is a participant
-                   const updatedChats = getChatsStmt.all().map(mapChat);
-                   wss.clients.forEach(client => {
-                      if (client.readyState === 1) {
-                         client.send(JSON.stringify({ Event: 'CHATS_LIST', Payload: updatedChats })); // In a real app we'd filter
-                      }
-                   });
+                   const updatedChats = getChatsStmt.all().map(mapChat) as any[];
+                   broadcast('CHATS_LIST', updatedChats);
                    send('DM_CREATED', { ChatID: chatID });
                 }
                 break;
@@ -396,11 +420,7 @@ async function startServer() {
                    );
                    
                    const refreshedChats = db.prepare('SELECT * FROM chats').all().map(mapChat);
-                   wss.clients.forEach(client => {
-                      if (client.readyState === 1) { 
-                         client.send(JSON.stringify({ Event: 'CHATS_LIST', Payload: refreshedChats }));
-                      }
-                   });
+                   broadcast('CHATS_LIST', refreshedChats);
                 }
                 break;
              }
@@ -430,17 +450,9 @@ async function startServer() {
                    const regs = db.prepare('SELECT registrations.*, users.RealName, users.Thumbnail as UserThumbnail FROM registrations JOIN users ON registrations.UserID = users.ID WHERE PartyID = ?').all(reg.PartyID);
                    send('REGISTRATIONS_LIST', regs);
                    const refreshedParties = getEnrichedParties(db);
-                   wss.clients.forEach(client => {
-                      if (client.readyState === 1) { 
-                         client.send(JSON.stringify({ Event: 'FEED_UPDATE', Payload: refreshedParties }));
-                      }
-                   });
+                   broadcast('FEED_UPDATE', refreshedParties);
                    const refreshedChats = db.prepare('SELECT * FROM chats').all().map(mapChat);
-                   wss.clients.forEach(client => {
-                      if (client.readyState === 1) { 
-                         client.send(JSON.stringify({ Event: 'CHATS_LIST', Payload: refreshedChats }));
-                      }
-                   });
+                   broadcast('CHATS_LIST', refreshedChats);
                 }
                 break;
              }
@@ -453,17 +465,9 @@ async function startServer() {
                    db.prepare('DELETE FROM registrations WHERE PartyID = ?').run(PartyID);
                    
                    const refreshedParties = getEnrichedParties(db);
-                   wss.clients.forEach(client => {
-                      if (client.readyState === 1) { 
-                         client.send(JSON.stringify({ Event: 'FEED_UPDATE', Payload: refreshedParties }));
-                      }
-                   });
+                   broadcast('FEED_UPDATE', refreshedParties);
                    const refreshedChats = db.prepare('SELECT * FROM chats').all().map(mapChat);
-                   wss.clients.forEach(client => {
-                      if (client.readyState === 1) { 
-                         client.send(JSON.stringify({ Event: 'CHATS_LIST', Payload: refreshedChats }));
-                      }
-                   });
+                   broadcast('CHATS_LIST', refreshedChats);
                 }
                 break;
              }

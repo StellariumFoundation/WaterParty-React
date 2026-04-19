@@ -178,11 +178,11 @@ export function SwipePage() {
                     }}
                   >
                     <img src={displayImage} alt={party.Title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-40" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-30" />
                   </div>
 
                   <div 
-                    className="absolute inset-0 flex flex-col justify-end p-8 pb-32 bg-gradient-to-t from-black/60 via-transparent to-transparent cursor-pointer"
+                    className="absolute inset-0 flex flex-col justify-end p-8 pb-32 bg-gradient-to-t from-black/40 via-transparent to-transparent cursor-pointer"
                     onClick={() => {
                         if (isTop) {
                           setCurrentPartyPhotoIndex(0);
@@ -398,8 +398,11 @@ export function SwipePage() {
                  <div 
                     className="relative h-[550px] w-full overflow-hidden shrink-0 cursor-pointer" 
                     onClick={(e) => {
-                       if (selectedUser?.ProfilePhotos?.length > 1) {
-                         setCurrentUserPhotoIndex((prev) => (prev + 1) % selectedUser.ProfilePhotos.length);
+                       const photos = (Array.isArray(selectedUser.ProfilePhotos) && selectedUser.ProfilePhotos.length > 0) 
+                         ? selectedUser.ProfilePhotos 
+                         : [selectedUser.Thumbnail].filter(Boolean) as string[];
+                       if (photos.length > 1) {
+                         setCurrentUserPhotoIndex((prev) => (prev + 1) % photos.length);
                        }
                     }}
                  >
@@ -410,16 +413,23 @@ export function SwipePage() {
                          animate={{ opacity: 1 }}
                          exit={{ opacity: 0 }}
                          transition={{ duration: 0.3 }}
-                         src={getAssetUrl(selectedUser.ProfilePhotos?.[currentUserPhotoIndex] || selectedUser.Thumbnail || '') || USER_PLACEHOLDER} 
+                         src={getAssetUrl(((Array.isArray(selectedUser.ProfilePhotos) && selectedUser.ProfilePhotos.length > 0) ? selectedUser.ProfilePhotos : [selectedUser.Thumbnail])[currentUserPhotoIndex] || selectedUser.Thumbnail || '') || USER_PLACEHOLDER} 
                          className="absolute inset-0 w-full h-full object-cover" 
+                         referrerPolicy="no-referrer"
                        />
                     </AnimatePresence>
                     
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#0A0B14] via-transparent to-transparent opacity-60 pointer-events-none" />
+
                     {/* Progress Bar Indicators at Top */}
-                    {selectedUser?.ProfilePhotos?.length > 1 && (
-                       <>
+                    {(() => {
+                       const photos = (Array.isArray(selectedUser.ProfilePhotos) && selectedUser.ProfilePhotos.length > 0) 
+                         ? selectedUser.ProfilePhotos 
+                         : [selectedUser.Thumbnail].filter(Boolean) as string[];
+                       if (photos.length <= 1) return null;
+                       return (
                           <div className="absolute top-12 left-6 right-6 flex gap-1 z-20">
-                             {selectedUser.ProfilePhotos.map((_: any, i: number) => (
+                             {photos.map((_: any, i: number) => (
                                 <div 
                                   key={i} 
                                   className={cn(
@@ -429,29 +439,9 @@ export function SwipePage() {
                                 />
                              ))}
                           </div>
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setCurrentUserPhotoIndex((prev) => (prev - 1 + selectedUser.ProfilePhotos.length) % selectedUser.ProfilePhotos.length);
-                            }}
-                            className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/20 backdrop-blur-md flex items-center justify-center text-white/50 hover:text-white hover:bg-black/40 transition-all z-20"
-                          >
-                            <ChevronLeft size={24} />
-                          </button>
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setCurrentUserPhotoIndex((prev) => (prev + 1) % selectedUser.ProfilePhotos.length);
-                            }}
-                            className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/20 backdrop-blur-md flex items-center justify-center text-white/50 hover:text-white hover:bg-black/40 transition-all z-20"
-                          >
-                            <ChevronRight size={24} />
-                          </button>
-                       </>
-                    )}
+                       );
+                    })()}
 
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#0A0B14] via-transparent to-transparent pointer-events-none" />
-                    
                     <button 
                       onClick={(e) => { e.stopPropagation(); setSelectedUser(null); }}
                       className="absolute top-8 left-6 w-10 h-10 z-30 rounded-full bg-black/30 backdrop-blur-md flex items-center justify-center text-white/70 hover:text-white transition-colors border border-white/10"
@@ -475,93 +465,138 @@ export function SwipePage() {
                     </div>
                  </div>
 
-                 <div className="p-8 space-y-8 flex-1">
-                    {selectedUser.Bio && (
-                      <div>
-                         <h4 className="text-[10px] font-black text-white/20 tracking-[0.2em] uppercase mb-4">Bio</h4>
-                         <p className="text-sm font-medium text-white/70 leading-relaxed tracking-tight">{selectedUser.Bio}</p>
-                      </div>
-                    )}
-                    
-                    <div className="grid grid-cols-2 gap-4">
-                       <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5 col-span-2">
-                          <p className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-1">Impact</p>
-                          <div className="flex items-center justify-between">
-                             <div className="flex flex-col">
-                                <span className="text-xl font-black text-white uppercase tracking-tighter">12</span>
-                                <span className="text-[8px] font-bold text-white/40 uppercase tracking-widest">Parties Hosted</span>
-                             </div>
-                             <div className="w-px h-8 bg-white/10" />
-                             <div className="flex flex-col">
-                                <span className="text-xl font-black text-brand-accent uppercase tracking-tighter">98%</span>
-                                <span className="text-[8px] font-bold text-white/40 uppercase tracking-widest">Vibe Rating</span>
-                             </div>
-                             <div className="w-px h-8 bg-white/10" />
-                             <div className="flex flex-col">
-                                <span className="text-xl font-black text-white uppercase tracking-tighter">4.2K</span>
-                                <span className="text-[8px] font-bold text-white/40 uppercase tracking-widest">Guest Reach</span>
-                             </div>
-                          </div>
+                 <div className="px-6 relative z-10 space-y-10 pb-32 pt-10">
+                    <div className="space-y-10">
+                       <div>
+                          <h3 className="text-[10px] font-bold text-white/40 tracking-wider mb-2 uppercase">About Me</h3>
+                          <p className="text-sm text-white/80 leading-relaxed">
+                            {selectedUser.Bio || "The host prefers to keep it a mystery."}
+                          </p>
                        </div>
-                       {selectedUser.JobTitle && (
-                         <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5">
-                            <p className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-1">Work</p>
-                            <p className="text-xs font-bold text-white uppercase">{selectedUser.JobTitle}</p>
-                            {selectedUser.Company && <p className="text-[10px] text-brand-accent font-bold mt-1 uppercase">@ {selectedUser.Company}</p>}
-                         </div>
-                       )}
-                       {selectedUser.School && (
-                         <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5">
-                            <p className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-1">Education</p>
-                            <p className="text-xs font-bold text-white uppercase">{selectedUser.School}</p>
-                            {selectedUser.Degree && <p className="text-[10px] text-brand-accent font-bold mt-1 uppercase">{selectedUser.Degree}</p>}
-                         </div>
-                       )}
-                        {selectedUser.HeightCm > 0 && (
-                          <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5">
-                             <p className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-1">Height</p>
-                             <p className="text-xs font-bold text-white uppercase">{selectedUser.HeightCm} CM</p>
-                          </div>
-                        )}
-                        <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5 col-span-2">
-                          <p className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-1">Vibe Status</p>
-                          <div className="flex items-center gap-2">
-                             <div className="h-1.5 flex-1 bg-white/5 rounded-full overflow-hidden">
-                                <div className="h-full bg-brand-accent w-[85%] shadow-[0_0_10px_rgba(0,210,255,0.4)]" />
-                             </div>
-                             <span className="text-[10px] font-black text-brand-accent uppercase tracking-widest">Master Host</span>
-                          </div>
-                       </div>
-                    </div>
 
-                    {(selectedUser.Instagram || selectedUser.Twitter) && (
-                       <div className="flex gap-4 pt-4">
-                          {selectedUser.Instagram && (
-                             <a 
-                                href={`https://instagram.com/${selectedUser.Instagram.replace('@', '')}`} 
-                                target="_blank" 
-                                rel="noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                className="flex-1 bg-[#11131F] border border-white/5 rounded-2xl p-4 flex items-center justify-center gap-3 text-white/60 hover:text-white hover:border-brand-accent transition-all active:scale-95"
-                             >
-                                <Instagram size={18} />
-                                <span className="text-[10px] font-black tracking-widest uppercase">Instagram</span>
-                             </a>
+                       <div className="grid grid-cols-2 gap-4">
+                          <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5 col-span-2">
+                             <p className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-4">Vibe Impact</p>
+                             <div className="flex items-center justify-between">
+                                <div className="flex flex-col">
+                                   <span className="text-xl font-black text-white uppercase tracking-tighter">
+                                      {selectedUser.HostedCount || 0}
+                                   </span>
+                                   <span className="text-[8px] font-bold text-white/40 uppercase tracking-widest mt-1">Hosted</span>
+                                </div>
+                                <div className="w-px h-8 bg-white/10 mx-2" />
+                                <div className="flex flex-col">
+                                   <span className="text-xl font-black text-brand-accent uppercase tracking-tighter">
+                                      {selectedUser.HostingRating ? `${selectedUser.HostingRating}%` : "0%"}
+                                   </span>
+                                   <span className="text-[8px] font-bold text-white/40 uppercase tracking-widest mt-1">Rating</span>
+                                </div>
+                                <div className="w-px h-8 bg-white/10 mx-2" />
+                                <div className="flex flex-col">
+                                   <span className="text-xl font-black text-white uppercase tracking-tighter">
+                                      {selectedUser.Reach ? (selectedUser.Reach >= 1000 ? `${(selectedUser.Reach / 1000).toFixed(1)}K` : selectedUser.Reach) : "0"}
+                                   </span>
+                                   <span className="text-[8px] font-bold text-white/40 uppercase tracking-widest mt-1">Reach</span>
+                                </div>
+                             </div>
+                          </div>
+
+                          {/* Detailed Attributes */}
+                          <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5 col-span-2">
+                             <h3 className="text-[9px] font-bold text-white/20 tracking-wider mb-4 uppercase">Attributes</h3>
+                             <div className="grid grid-cols-2 gap-y-6 gap-x-4">
+                                <div className="flex flex-col">
+                                   <span className="text-[8px] text-white/40 uppercase mb-1 tracking-widest font-bold">Height</span>
+                                   <span className="text-xs text-white font-black uppercase tracking-widest">
+                                      {selectedUser.HeightCm ? `${selectedUser.HeightCm} CM` : "--"}
+                                   </span>
+                                </div>
+                                <div className="flex flex-col">
+                                   <span className="text-[8px] text-white/40 uppercase mb-1 tracking-widest font-bold">Gender</span>
+                                   <span className="text-xs text-white font-black uppercase tracking-widest">
+                                      {selectedUser.Gender || "Not set"}
+                                   </span>
+                                </div>
+                                <div className="flex flex-col">
+                                   <span className="text-[8px] text-white/40 uppercase mb-1 tracking-widest font-bold">Instagram</span>
+                                   <span className="text-xs text-brand-accent font-black uppercase tracking-widest truncate">
+                                      {selectedUser.Instagram ? `@${selectedUser.Instagram.replace('@', '')}` : "Not linked"}
+                                   </span>
+                                </div>
+                                <div className="flex flex-col">
+                                   <span className="text-[8px] text-white/40 uppercase mb-1 tracking-widest font-bold">Twitter / X</span>
+                                   <span className="text-xs text-brand-accent font-black uppercase tracking-widest truncate">
+                                      {selectedUser.Twitter ? `@${selectedUser.Twitter.replace('@', '')}` : "Not linked"}
+                                   </span>
+                                </div>
+                             </div>
+                          </div>
+
+                          {(selectedUser.JobTitle || selectedUser.School) && (
+                             <>
+                                {selectedUser.JobTitle && (
+                                   <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5">
+                                      <p className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-1">Work</p>
+                                      <p className="text-xs font-bold text-white uppercase truncate">{selectedUser.JobTitle}</p>
+                                      {selectedUser.Company && <p className="text-[10px] text-brand-accent font-bold mt-1 uppercase truncate">@ {selectedUser.Company}</p>}
+                                   </div>
+                                )}
+
+                                {selectedUser.School && (
+                                   <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5">
+                                      <p className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-1">Education</p>
+                                      <p className="text-xs font-bold text-white uppercase truncate">{selectedUser.School}</p>
+                                      {selectedUser.Degree && <p className="text-[10px] text-brand-accent font-bold mt-1 uppercase truncate">{selectedUser.Degree}</p>}
+                                   </div>
+                                )}
+                             </>
                           )}
-                          {selectedUser.Twitter && (
-                             <a 
-                                href={`https://twitter.com/${selectedUser.Twitter.replace('@', '')}`} 
-                                target="_blank" 
-                                rel="noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                className="flex-1 bg-[#11131F] border border-white/5 rounded-2xl p-4 flex items-center justify-center gap-3 text-white/60 hover:text-white hover:border-brand-accent transition-all active:scale-95"
-                             >
-                                <Twitter size={18} />
-                                <span className="text-[10px] font-black tracking-widest uppercase">Twitter</span>
-                             </a>
-                          )}
+
+                          <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5 col-span-2">
+                             <p className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-1">Vibe Status</p>
+                             <div className="flex items-center gap-2">
+                                <div className="h-1.5 flex-1 bg-white/5 rounded-full overflow-hidden">
+                                   <div 
+                                      className="h-full bg-brand-accent shadow-[0_0_10px_rgba(0,210,255,0.4)]" 
+                                      style={{ width: `${Math.min(100, (selectedUser.TrustScore || 0))}%` }}
+                                   />
+                                </div>
+                                <span className="text-[10px] font-black text-brand-accent uppercase tracking-widest">
+                                   {selectedUser.TrustScore >= 95 ? "Master Host" : selectedUser.TrustScore >= 80 ? "Pro Host" : "New Host"}
+                                </span>
+                             </div>
+                          </div>
                        </div>
-                    )}
+
+                       {(selectedUser.Instagram || selectedUser.Twitter) && (
+                          <div className="flex gap-4">
+                             {selectedUser.Instagram && (
+                                <a 
+                                   href={`https://instagram.com/${selectedUser.Instagram.replace('@', '')}`} 
+                                   target="_blank" 
+                                   rel="noreferrer"
+                                   onClick={(e) => e.stopPropagation()}
+                                   className="flex-1 bg-[#11131F] border border-white/5 rounded-2xl p-4 flex items-center justify-center gap-3 text-white/60 hover:text-white hover:border-brand-accent transition-all active:scale-95"
+                                >
+                                   <Instagram size={18} />
+                                   <span className="text-[10px] font-black tracking-widest uppercase">Instagram</span>
+                                </a>
+                             )}
+                             {selectedUser.Twitter && (
+                                <a 
+                                   href={`https://twitter.com/${selectedUser.Twitter.replace('@', '')}`} 
+                                   target="_blank" 
+                                   rel="noreferrer"
+                                   onClick={(e) => e.stopPropagation()}
+                                   className="flex-1 bg-[#11131F] border border-white/5 rounded-2xl p-4 flex items-center justify-center gap-3 text-white/60 hover:text-white hover:border-brand-accent transition-all active:scale-95"
+                                >
+                                   <Twitter size={18} />
+                                   <span className="text-[10px] font-black tracking-widest uppercase">Twitter</span>
+                                </a>
+                             )}
+                          </div>
+                       )}
+                    </div>
                  </div>
 
                  <div className="p-6 pb-28 sticky bottom-0 bg-gradient-to-t from-[#0A0B14] via-[#0A0B14] to-transparent pt-10">
