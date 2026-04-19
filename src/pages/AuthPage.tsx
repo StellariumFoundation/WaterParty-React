@@ -109,9 +109,18 @@ export function AuthPage() {
                    };
                    fileInput.click();
                  }}
-                 className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm font-bold text-white/50 cursor-pointer hover:bg-white/10 transition-colors flex items-center justify-between"
+                 className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm font-bold text-white/50 cursor-pointer hover:bg-white/10 transition-colors flex items-center justify-between overflow-hidden"
               >
-                 {photoUrl ? "PHOTO ATTACHED ✅" : "UPLOAD PROFILE PHOTO"}
+                 <div className="flex items-center gap-3">
+                   {photoUrl ? (
+                     <div className="w-10 h-10 rounded-full overflow-hidden border border-brand-accent/30 flex-shrink-0">
+                       <img src={photoUrl} alt="Preview" className="w-full h-full object-cover" />
+                     </div>
+                   ) : <span className="text-white/20 text-lg">📷</span>}
+                   <span className={photoUrl ? "text-brand-accent" : ""}>
+                     {photoUrl ? "PHOTO ATTACHED ✅" : "UPLOAD PROFILE PHOTO"}
+                   </span>
+                 </div>
               </div>
             </div>
 

@@ -6,6 +6,8 @@ import { motion } from 'motion/react';
 export function BottomNav() {
   const location = useLocation();
 
+  if (location.pathname.startsWith('/chat/')) return null;
+
   const navItems = [
     { path: '/', icon: Layers, label: 'Cards' },
     { path: '/messages', icon: MessageSquare, label: 'Messages' },

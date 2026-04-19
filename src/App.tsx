@@ -8,6 +8,7 @@ import { BottomNav } from './components/BottomNav';
 import { SwipePage } from './pages/SwipePage';
 import { MessagesPage } from './pages/MessagesPage';
 import { CreatePartyPage } from './pages/CreatePartyPage';
+import { ChatRoomPage } from './pages/ChatRoomPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { StoreProvider, useStore } from './lib/Store';
 import { AuthPage } from './pages/AuthPage';
@@ -26,6 +27,7 @@ function MainApp() {
             <Routes>
               <Route path="/" element={<SwipePage />} />
               <Route path="/messages" element={<MessagesPage />} />
+              <Route path="/chat/:chatId" element={<ChatRoomPage />} />
               <Route path="/create" element={<CreatePartyPage />} />
               <Route path="/profile" element={<ProfilePage />} />
             </Routes>

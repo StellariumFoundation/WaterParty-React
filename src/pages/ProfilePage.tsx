@@ -1,17 +1,20 @@
-import { useState, useRef } from 'react';
-import { Briefcase, GraduationCap, User as UserIcon, Instagram, Twitter, Edit, Save, Camera, X } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Briefcase, GraduationCap, User as UserIcon, Instagram, Twitter, Edit, Save, Camera, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useStore } from '../lib/Store';
 import { getAssetUrl } from '../lib/constants';
 
 export function ProfilePage() {
   const { user, logout, sendSocketMessage } = useStore();
   const [isEditing, setIsEditing] = useState(false);
+  const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [editData, setEditData] = useState({
     RealName: '',
     Bio: '',
     Thumbnail: '',
+    ProfilePhotos: [] as string[],
     Instagram: '',
     Twitter: '',
     Gender: '',
@@ -29,6 +32,7 @@ export function ProfilePage() {
       RealName: user.RealName || '',
       Bio: user.Bio || '',
       Thumbnail: user.Thumbnail || (user.ProfilePhotos?.length > 0 ? user.ProfilePhotos[0] : ''),
+      ProfilePhotos: user.ProfilePhotos || [],
       Instagram: user.Instagram || '',
       Twitter: user.Twitter || '',
       Gender: user.Gender || '',
@@ -42,65 +46,128 @@ export function ProfilePage() {
   };
 
   const handleSave = () => {
-    sendSocketMessage('UPDATE_PROFILE', {
+    // Basic validation for social handles
+    const cleanHandle = (handle: string) => {
+      if (!handle) return '';
+      // Remove @ if exists, remove whitespace
+      let h = handle.trim().replace(/^@/, '');
+      // If full URL, try to extract handle
+      if (h.includes('instagram.com/')) h = h.split('instagram.com/')[1].split('/')[0].split('?')[0];
+      if (h.includes('twitter.com/')) h = h.split('twitter.com/')[1].split('/')[0].split('?')[0];
+      if (h.includes('x.com/')) h = h.split('x.com/')[1].split('/')[0].split('?')[0];
+      return h;
+    };
+
+    const validatedData = {
       ...editData,
-      ProfilePhotos: editData.Thumbnail ? [editData.Thumbnail] : []
-    });
+      Instagram: cleanHandle(editData.Instagram),
+      Twitter: cleanHandle(editData.Twitter),
+      Thumbnail: editData.ProfilePhotos.length > 0 ? editData.ProfilePhotos[0] : ''
+    };
+
+    sendSocketMessage('UPDATE_PROFILE', validatedData);
     setIsEditing(false);
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
+    const files = Array.from(e.target.files || []);
+    const remainingSlots = 8 - editData.ProfilePhotos.length;
+    const filesToProcess = files.slice(0, remainingSlots) as File[];
+
+    filesToProcess.forEach(file => {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setEditData({ ...editData, Thumbnail: reader.result as string });
+        setEditData(prev => ({
+          ...prev,
+          ProfilePhotos: [...prev.ProfilePhotos, reader.result as string]
+        }));
       };
       reader.readAsDataURL(file);
+    });
+  };
+
+  const removePhoto = (index: number) => {
+    setEditData(prev => ({
+      ...prev,
+      ProfilePhotos: prev.ProfilePhotos.filter((_, i) => i !== index)
+    }));
+    if (currentPhotoIndex >= editData.ProfilePhotos.length - 1) {
+      setCurrentPhotoIndex(0);
     }
   };
 
-  const displayImage = user.ProfilePhotos?.length > 0 
-      ? getAssetUrl(user.ProfilePhotos[0]) 
-      : user.Thumbnail ? getAssetUrl(user.Thumbnail) : "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?q=80&w=800&auto=format&fit=crop";
+  const activePhotos = isEditing ? editData.ProfilePhotos : (user.ProfilePhotos || []);
+  
+  const nextPhoto = () => {
+    if (activePhotos.length <= 1) return;
+    setCurrentPhotoIndex((prev) => (prev + 1) % activePhotos.length);
+  };
+
+  const prevPhoto = () => {
+    if (activePhotos.length <= 1) return;
+    setCurrentPhotoIndex((prev) => (prev - 1 + activePhotos.length) % activePhotos.length);
+  };
 
   return (
     <div className="h-full w-full bg-transparent flex flex-col overflow-y-auto">
       
-      {/* Hero Image Section */}
-      <div className="relative h-80 w-full shrink-0">
-         <img 
-            src={isEditing && editData.Thumbnail ? editData.Thumbnail : displayImage} 
-            alt="Profile" 
-            className="w-full h-full object-cover mix-blend-overlay opacity-80"
-         />
-         <div className="absolute inset-0 bg-gradient-to-t from-brand-bg via-brand-bg/40 to-transparent" />
-         
-         {isEditing && (
-            <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-               <button 
-                  onClick={() => fileInputRef.current?.click()}
-                  className="bg-brand-primary p-4 rounded-full text-white shadow-xl hover:scale-105 active:scale-95 transition-all"
-               >
-                  <Camera size={28} />
-               </button>
-               <input 
-                  type="file" 
-                  ref={fileInputRef} 
-                  accept="image/*" 
-                  className="hidden" 
-                  onChange={handleImageUpload} 
-               />
-            </div>
-         )}
-         
-         <div className="absolute top-12 left-6 right-6 flex justify-between items-start">
-            <div className="w-full h-1 bg-white/20 rounded-full overflow-hidden">
-               <div className="w-1/3 h-full bg-white"></div>
-            </div>
-         </div>
+      {/* Hero Carousel Section */}
+      <div className="relative h-[550px] w-full shrink-0 bg-[#0A0B14] flex items-center justify-center overflow-hidden">
+         <AnimatePresence mode="wait">
+            {activePhotos.length > 0 ? (
+              <motion.img 
+                 key={activePhotos[currentPhotoIndex]}
+                 src={getAssetUrl(activePhotos[currentPhotoIndex])} 
+                 initial={{ opacity: 0 }}
+                 animate={{ opacity: 1 }}
+                 exit={{ opacity: 0 }}
+                 transition={{ duration: 0.4 }}
+                 alt="Profile" 
+                 className="absolute inset-0 w-full h-full object-cover"
+              />
+            ) : (
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="flex flex-col items-center gap-4"
+              >
+                <UserIcon size={64} className="text-white/10" />
+                <p className="text-[10px] text-white/20 tracking-widest uppercase">No Photos</p>
+              </motion.div>
+            )}
+         </AnimatePresence>
 
-         <div className="absolute bottom-6 right-6">
+         <div className="absolute inset-0 bg-gradient-to-t from-brand-bg via-transparent to-brand-bg/20" />
+         
+         {/* Carousel Controls */}
+         {activePhotos.length > 1 && (
+           <>
+              <button 
+                onClick={prevPhoto}
+                className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/20 backdrop-blur-md flex items-center justify-center text-white/50 hover:text-white hover:bg-black/40 transition-all z-20"
+              >
+                <ChevronLeft size={24} />
+              </button>
+              <button 
+                onClick={nextPhoto}
+                className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/20 backdrop-blur-md flex items-center justify-center text-white/50 hover:text-white hover:bg-black/40 transition-all z-20"
+              >
+                <ChevronRight size={24} />
+              </button>
+
+              {/* Indicators */}
+              <div className="absolute top-12 left-6 right-6 flex gap-1 z-20">
+                {activePhotos.map((_, idx) => (
+                  <div 
+                    key={idx} 
+                    className={`h-1 flex-1 rounded-full transition-all duration-300 ${idx === currentPhotoIndex ? 'bg-white' : 'bg-white/20'}`}
+                  />
+                ))}
+              </div>
+           </>
+         )}
+
+         <div className="absolute bottom-6 right-6 z-20">
              <div className="px-3 py-1.5 bg-black/80 backdrop-blur-md rounded-xl text-xs font-bold text-amber-400 flex items-center shadow-lg border border-white/5 uppercase">
                 🛡️ {(user.TrustScore || 100).toFixed(1)} TRUST
              </div>
@@ -122,6 +189,44 @@ export function ProfilePage() {
                      className="w-full bg-[#11131F] border border-white/10 rounded-xl px-4 py-3 text-white focus:border-brand-primary outline-none transition-colors"
                    />
                  </div>
+
+                 {/* Photo Gallery Editor */}
+                 <div>
+                   <div className="flex items-center justify-between mb-2">
+                     <label className="text-[10px] font-bold text-white/40 tracking-wider uppercase block">Manage Gallery</label>
+                     <span className="text-[10px] font-bold text-white/20">{editData.ProfilePhotos.length}/8</span>
+                   </div>
+                   <div className="grid grid-cols-4 gap-2">
+                     {editData.ProfilePhotos.map((photo, index) => (
+                       <div key={index} className="relative aspect-[3/4] rounded-xl overflow-hidden group">
+                         <img src={getAssetUrl(photo)} alt="" className="w-full h-full object-cover" />
+                         <button 
+                           onClick={() => removePhoto(index)}
+                           className="absolute top-1 right-1 bg-black/60 w-6 h-6 rounded-full flex items-center justify-center text-white p-1 hover:bg-black"
+                         >
+                           <X size={14} />
+                         </button>
+                       </div>
+                     ))}
+                     {editData.ProfilePhotos.length < 8 && (
+                       <button 
+                         onClick={() => fileInputRef.current?.click()}
+                         className="aspect-[3/4] rounded-xl border border-dashed border-white/20 bg-[#11131F] flex items-center justify-center hover:bg-white/5 transition-colors"
+                       >
+                         <Camera size={20} className="text-white/20" />
+                       </button>
+                     )}
+                     <input 
+                        type="file" 
+                        ref={fileInputRef} 
+                        accept="image/*" 
+                        multiple
+                        className="hidden" 
+                        onChange={handleImageUpload} 
+                     />
+                   </div>
+                 </div>
+
                  <div>
                    <label className="text-[10px] font-bold text-white/40 tracking-wider mb-2 uppercase block">Bio</label>
                    <textarea 
@@ -131,6 +236,31 @@ export function ProfilePage() {
                    />
                  </div>
                  
+                 <div className="grid grid-cols-2 gap-4">
+                     <div>
+                       <label className="text-[10px] font-bold text-white/40 tracking-wider mb-2 uppercase block">Gender</label>
+                       <select 
+                         value={editData.Gender}
+                         onChange={(e) => setEditData({...editData, Gender: e.target.value})}
+                         className="w-full bg-[#11131F] border border-white/10 rounded-xl px-4 py-3 text-white focus:border-brand-primary outline-none transition-colors appearance-none"
+                       >
+                         <option value="">Select...</option>
+                         <option value="Male">Male</option>
+                         <option value="Female">Female</option>
+                         <option value="Other">Other</option>
+                       </select>
+                     </div>
+                     <div>
+                       <label className="text-[10px] font-bold text-white/40 tracking-wider mb-2 uppercase block">Height (cm)</label>
+                       <input 
+                         type="number" 
+                         value={editData.HeightCm}
+                         onChange={(e) => setEditData({...editData, HeightCm: Number(e.target.value)})}
+                         className="w-full bg-[#11131F] border border-white/10 rounded-xl px-4 py-3 text-white focus:border-brand-primary outline-none transition-colors"
+                       />
+                     </div>
+                 </div>
+
                  <div className="grid grid-cols-2 gap-4">
                      <div>
                        <label className="text-[10px] font-bold text-white/40 tracking-wider mb-2 uppercase block">Instagram</label>
@@ -147,27 +277,6 @@ export function ProfilePage() {
                          type="text" 
                          value={editData.Twitter}
                          onChange={(e) => setEditData({...editData, Twitter: e.target.value})}
-                         className="w-full bg-[#11131F] border border-white/10 rounded-xl px-4 py-3 text-white focus:border-brand-primary outline-none transition-colors"
-                       />
-                     </div>
-                 </div>
-
-                 <div className="grid grid-cols-2 gap-4">
-                     <div>
-                       <label className="text-[10px] font-bold text-white/40 tracking-wider mb-2 uppercase block">Gender</label>
-                       <input 
-                         type="text" 
-                         value={editData.Gender}
-                         onChange={(e) => setEditData({...editData, Gender: e.target.value})}
-                         className="w-full bg-[#11131F] border border-white/10 rounded-xl px-4 py-3 text-white focus:border-brand-primary outline-none transition-colors"
-                       />
-                     </div>
-                     <div>
-                       <label className="text-[10px] font-bold text-white/40 tracking-wider mb-2 uppercase block">Height (cm)</label>
-                       <input 
-                         type="number" 
-                         value={editData.HeightCm}
-                         onChange={(e) => setEditData({...editData, HeightCm: Number(e.target.value)})}
                          className="w-full bg-[#11131F] border border-white/10 rounded-xl px-4 py-3 text-white focus:border-brand-primary outline-none transition-colors"
                        />
                      </div>
@@ -193,7 +302,7 @@ export function ProfilePage() {
                        />
                      </div>
                  </div>
-                 
+
                  <div className="grid grid-cols-2 gap-4">
                      <div>
                        <label className="text-[10px] font-bold text-white/40 tracking-wider mb-2 uppercase block">School</label>
@@ -214,7 +323,6 @@ export function ProfilePage() {
                        />
                      </div>
                  </div>
-
               </div>
             ) : (
               <>
@@ -295,16 +403,26 @@ export function ProfilePage() {
                      <h3 className="text-[10px] font-bold text-white/40 tracking-wider mb-3 uppercase">Socials</h3>
                      <div className="flex gap-3">
                         {user.Instagram && (
-                           <div className="flex-1 bg-[#11131F] border border-white/5 rounded-2xl p-4 flex items-center gap-3">
-                              <Instagram size={18} className="text-pink-500 shrink-0" />
-                              <span className="text-sm text-white font-medium truncate">{user.Instagram}</span>
-                           </div>
+                           <a 
+                             href={`https://instagram.com/${user.Instagram}`} 
+                             target="_blank" 
+                             rel="noopener noreferrer"
+                             className="flex-1 bg-[#11131F] border border-white/5 rounded-2xl p-4 flex items-center gap-3 hover:bg-white/5 transition-colors group"
+                           >
+                              <Instagram size={18} className="text-pink-500 shrink-0 group-hover:scale-110 transition-transform" />
+                              <span className="text-sm text-white font-medium truncate group-hover:text-brand-primary transition-colors">@{user.Instagram}</span>
+                           </a>
                         )}
                         {user.Twitter && (
-                           <div className="flex-1 bg-[#11131F] border border-white/5 rounded-2xl p-4 flex items-center gap-3">
-                              <Twitter size={18} className="text-blue-400 shrink-0" />
-                              <span className="text-sm text-white font-medium truncate">{user.Twitter}</span>
-                           </div>
+                           <a 
+                             href={`https://x.com/${user.Twitter}`} 
+                             target="_blank" 
+                             rel="noopener noreferrer"
+                             className="flex-1 bg-[#11131F] border border-white/5 rounded-2xl p-4 flex items-center gap-3 hover:bg-white/5 transition-colors group"
+                           >
+                              <Twitter size={18} className="text-blue-400 shrink-0 group-hover:scale-110 transition-transform" />
+                              <span className="text-sm text-white font-medium truncate group-hover:text-brand-primary transition-colors">@{user.Twitter}</span>
+                           </a>
                         )}
                      </div>
                    </section>

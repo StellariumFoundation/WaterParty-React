@@ -45,7 +45,10 @@ db.exec(`
     VibeTags TEXT,
     Rules TEXT,
     ChatRoomID TEXT,
-    Thumbnail TEXT
+    Thumbnail TEXT,
+    CrowdfundTarget REAL,
+    CrowdfundCurrent REAL,
+    PartyType TEXT
   );
   CREATE TABLE IF NOT EXISTS chats (
     ID TEXT PRIMARY KEY,
@@ -83,8 +86,8 @@ async function startServer() {
     
     // Insert party
     const insertParty = db.prepare(
-      `INSERT INTO parties (ID, HostID, Title, Description, PartyPhotos, StartTime, DurationHours, Status, Address, City, GeoLat, GeoLon, MaxCapacity, CurrentGuestCount, VibeTags, Rules, ChatRoomID, Thumbnail)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO parties (ID, HostID, Title, Description, PartyPhotos, StartTime, DurationHours, Status, Address, City, GeoLat, GeoLon, MaxCapacity, CurrentGuestCount, VibeTags, Rules, ChatRoomID, Thumbnail, CrowdfundTarget, CrowdfundCurrent, PartyType)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
     insertParty.run(
         dummyId, 
@@ -104,7 +107,10 @@ async function startServer() {
         JSON.stringify(['Rooftop', 'House Music']), 
         JSON.stringify(['BYOB', 'Good Vibes Only']), 
         'chat_1', 
-        'https://images.unsplash.com/photo-1574169208507-84376144848b?q=80&w=800&auto=format&fit=crop'
+        'https://images.unsplash.com/photo-1574169208507-84376144848b?q=80&w=800&auto=format&fit=crop',
+        0,
+        0,
+        'ROOFTOP'
     );
 
     const insertChat = db.prepare(
@@ -128,7 +134,7 @@ async function startServer() {
     const { email, password } = req.body;
     let userRow = getUserStmt.get(email);
     
-    if (!userRow || !bcrypt.compareSync(password, userRow.Password)) {
+    if (!userRow || !bcrypt.compareSync(password, userRow.Password as string)) {
        return res.status(401).json({ error: "Invalid username or password" });
     }
     const safeUser = { ...userRow };
@@ -187,8 +193,8 @@ async function startServer() {
   const getChatsStmt = db.prepare('SELECT * FROM chats');
   const getPartiesStmt = db.prepare('SELECT * FROM parties');
   const insertPartyStmt = db.prepare(`
-    INSERT INTO parties (ID, HostID, Title, Description, PartyPhotos, StartTime, DurationHours, Status, Address, City, GeoLat, GeoLon, MaxCapacity, CurrentGuestCount, VibeTags, Rules, ChatRoomID, Thumbnail) 
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO parties (ID, HostID, Title, Description, PartyPhotos, StartTime, DurationHours, Status, Address, City, GeoLat, GeoLon, MaxCapacity, CurrentGuestCount, VibeTags, Rules, ChatRoomID, Thumbnail, CrowdfundTarget, CrowdfundCurrent, PartyType) 
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const insertChatWSRoomStmt = db.prepare(`
      INSERT INTO chats (ID, PartyID, Title, ImageUrl, RecentMessages, IsGroup, ParticipantIDs) 
@@ -230,11 +236,52 @@ async function startServer() {
              case 'SWIPE':
                break;
              case 'CREATE_PARTY': {
+               // Server-side validation
+               if (!Payload.Title?.trim() || Payload.Title.length < 3) {
+                  return send('ERROR', { message: 'Title too short' });
+               }
+               if (!Payload.Description?.trim() || Payload.Description.length < 10) {
+                  return send('ERROR', { message: 'Description too short' });
+               }
+               if (!Payload.City?.trim()) {
+                  return send('ERROR', { message: 'City is required' });
+               }
+               if (Number(Payload.MaxCapacity) > 300) {
+                  return send('ERROR', { message: 'Max capacity is 300' });
+               }
+               if (Number(Payload.DurationHours) > 6) {
+                  return send('ERROR', { message: 'Max duration is 6 hours' });
+               }
+               if (!Payload.PartyPhotos?.length) {
+                  return send('ERROR', { message: 'At least one photo required' });
+               }
+
                const pID = 'party_' + Date.now();
                const imgUrl = Payload.PartyPhotos?.[0] || Payload.Thumbnail || '';
                
+               console.log(`[SERVER] Creating party: ${pID} | Title: ${Payload.Title}`);
                insertPartyStmt.run(
-                 pID, Token, Payload.Title, Payload.Description, JSON.stringify(Payload.PartyPhotos || []), Payload.StartTime, Payload.DurationHours, 'OPEN', Payload.Address, Payload.City, Payload.GeoLat || 0, Payload.GeoLon || 0, Payload.MaxCapacity, 1, JSON.stringify(Payload.VibeTags || []), JSON.stringify(Payload.Rules || []), Payload.ChatRoomID, imgUrl
+                 pID, 
+                 Token, 
+                 Payload.Title, 
+                 Payload.Description, 
+                 JSON.stringify(Payload.PartyPhotos || []), 
+                 Payload.StartTime, 
+                 Payload.DurationHours, 
+                 'OPEN', 
+                 Payload.Address, 
+                 Payload.City, 
+                 Payload.GeoLat || 0, 
+                 Payload.GeoLon || 0, 
+                 Payload.MaxCapacity, 
+                 1, 
+                 JSON.stringify(Payload.VibeTags || []), 
+                 JSON.stringify(Payload.Rules || []), 
+                 Payload.ChatRoomID, 
+                 imgUrl,
+                 Payload.CrowdfundTarget || 0,
+                 0, // CrowdfundCurrent
+                 Payload.PartyType || 'OTHER'
                );
                
                insertChatWSRoomStmt.run(
@@ -272,6 +319,30 @@ async function startServer() {
                const updatedUser = getUserByIdStmt.get(Token);
                if(updatedUser) send('PROFILE_UPDATED', mapUser(updatedUser));
                break;
+             }
+             case 'SEND_MESSAGE': {
+                const { ChatID, Content } = Payload;
+                const chatRow = db.prepare('SELECT * FROM chats WHERE ID = ?').get(ChatID);
+                if (chatRow) {
+                   const chat = mapChat(chatRow);
+                   const newMessage = {
+                      SenderID: Token,
+                      Timestamp: new Date().toISOString(),
+                      Content
+                   };
+                   const updatedMessages = [...(chat.RecentMessages || []), newMessage];
+                   db.prepare('UPDATE chats SET RecentMessages = ? WHERE ID = ?').run(
+                      JSON.stringify(updatedMessages), ChatID
+                   );
+                   
+                   const refreshedChats = db.prepare('SELECT * FROM chats').all().map(mapChat);
+                   wss.clients.forEach(client => {
+                      if (client.readyState === 1) { 
+                         client.send(JSON.stringify({ Event: 'CHATS_LIST', Payload: refreshedChats }));
+                      }
+                   });
+                }
+                break;
              }
           }
        } catch (e) {

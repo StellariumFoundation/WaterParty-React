@@ -37,6 +37,9 @@ export interface Party {
   Rules: string[];
   ChatRoomID: string;
   Thumbnail: string;
+  CrowdfundTarget?: number;
+  CrowdfundCurrent?: number;
+  PartyType?: string;
 }
 
 export interface ChatRoom {
