@@ -36,7 +36,7 @@ function LocationMarker({ position, setPosition }: { position: L.LatLng | null, 
 }
 
 export function CreatePartyPage() {
-  const { sendSocketMessage } = useStore();
+  const { sendSocketMessage, coords, refreshLocation } = useStore();
   const navigate = useNavigate();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -58,6 +58,16 @@ export function CreatePartyPage() {
   const [success, setSuccess] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (coords && !mapPosition) {
+       setMapPosition(new L.LatLng(coords.lat, coords.lon));
+    } else if (!coords) {
+       refreshLocation((newCoords) => {
+          setMapPosition(new L.LatLng(newCoords.lat, newCoords.lon));
+       });
+    }
+  }, [coords]);
 
   const validate = () => {
     const errs: string[] = [];
@@ -165,7 +175,7 @@ export function CreatePartyPage() {
   };
 
   return (
-    <div className="h-full w-full bg-transparent flex flex-col overflow-y-auto pt-6 px-6 scrollbar-hide pb-10">
+    <div className="h-full w-full bg-transparent flex flex-col overflow-y-auto pt-6 px-6 scrollbar-hide pb-32">
       
       {/* TILE HEADER */}
       <div className="mb-8">

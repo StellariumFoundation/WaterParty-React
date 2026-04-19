@@ -10,14 +10,13 @@ const USER_PLACEHOLDER = "https://images.unsplash.com/photo-1511367461989-f85a21
 const PARTY_PLACEHOLDER = "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?q=80&w=1000";
 
 export function SwipePage() {
-  const { feed, user, sendSocketMessage, removeFromFeed } = useStore();
+  const { feed, user, sendSocketMessage, removeFromFeed, coords, refreshLocation } = useStore();
   const navigate = useNavigate();
   const [swipeDir, setSwipeDir] = useState<{ [key: string]: 'left' | 'right' | null }>({});
   const [selectedParty, setSelectedParty] = useState<any | null>(null);
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
   const [currentPartyPhotoIndex, setCurrentPartyPhotoIndex] = useState(0);
   const [currentUserPhotoIndex, setCurrentUserPhotoIndex] = useState(0);
-  const [userCoords, setUserCoords] = useState<{ lat: number; lon: number } | null>(null);
 
   const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371;
@@ -51,19 +50,17 @@ export function SwipePage() {
   };
 
   useEffect(() => {
-    if ('geolocation' in navigator) {
-       navigator.geolocation.getCurrentPosition((pos) => {
-           setUserCoords({ lat: pos.coords.latitude, lon: pos.coords.longitude });
-           sendSocketMessage('GET_FEED', {
-              Lat: pos.coords.latitude,
-              Lon: pos.coords.longitude,
-              RadiusKm: 50
-           });
-       }, (error) => {
-           sendSocketMessage('GET_FEED', { Lat: 0, Lon: 0, RadiusKm: 50000 });
-       });
-    } else {
-       sendSocketMessage('GET_FEED', { Lat: 0, Lon: 0, RadiusKm: 50000 });
+    refreshLocation((newCoords) => {
+      sendSocketMessage('GET_FEED', {
+        Lat: newCoords.lat,
+        Lon: newCoords.lon,
+        RadiusKm: 50
+      });
+    });
+    
+    // Fallback if location prompt is ignored/slow
+    if (!coords) {
+       sendSocketMessage('GET_FEED', { Lat: 0, Lon: 0 });
     }
   }, []);
 
@@ -197,9 +194,9 @@ export function SwipePage() {
                         <span className="px-2.5 py-1 bg-white/5 backdrop-blur-xl rounded-lg text-[9px] font-black text-white/50 border border-white/5 uppercase">
                            {party.City || "Unknown"}
                         </span>
-                        {userCoords && party.GeoLat && party.GeoLon && (
+                        {coords && party.GeoLat && party.GeoLon && (
                            <span className="px-2.5 py-1 bg-white/5 backdrop-blur-xl rounded-lg text-[9px] font-black text-brand-accent border border-white/5 uppercase">
-                              {getDistance(userCoords.lat, userCoords.lon, party.GeoLat, party.GeoLon)} KM
+                              {getDistance(coords.lat, coords.lon, party.GeoLat, party.GeoLon)} KM
                            </span>
                         )}
                      </div>

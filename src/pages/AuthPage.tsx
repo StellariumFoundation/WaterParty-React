@@ -58,7 +58,17 @@ export function AuthPage() {
       }
       
       if (!res.ok) throw new Error(data?.error || data?.message || 'Request failed');
-      login(data);
+      
+      // Request location before finalizing login so SwipePage has it immediately
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          login(data);
+        },
+        (error) => {
+          console.warn("Location permission denied during auth, proceeding with default location.");
+          login(data);
+        }
+      );
     } catch (err: any) {
       setError(err.message);
     } finally {

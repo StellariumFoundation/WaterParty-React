@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { User, Party, ChatRoom } from './types';
 import { WS_BASE } from './constants';
 
@@ -7,10 +8,12 @@ interface StoreContextType {
   feed: Party[];
   chats: ChatRoom[];
   registrations: any[];
+  coords: { lat: number; lon: number } | null;
   login: (u: User) => void;
   logout: () => void;
   sendSocketMessage: (event: string, payload: any) => void;
   removeFromFeed: (id: string) => void;
+  refreshLocation: (onSuccess?: (coords: { lat: number; lon: number }) => void) => void;
 }
 
 const StoreContext = createContext<StoreContextType | null>(null);
@@ -20,7 +23,26 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
   const [feed, setFeed] = useState<Party[]>([]);
   const [chats, setChats] = useState<ChatRoom[]>([]);
   const [registrations, setRegistrations] = useState<any[]>([]);
+  const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
+  const navigate = useRef<ReturnType<typeof useNavigate> | null>(null);
+  const navTrigger = useNavigate();
+  
+  useEffect(() => {
+    navigate.current = navTrigger;
+  }, [navTrigger]);
+
+  const refreshLocation = (onSuccess?: (coords: { lat: number; lon: number }) => void) => {
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition((pos) => {
+        const newCoords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+        setCoords(newCoords);
+        if (onSuccess) onSuccess(newCoords);
+      }, (error) => {
+        console.error("Location error:", error);
+      });
+    }
+  };
 
   useEffect(() => {
     const stored = localStorage.getItem('waterparty_user');
@@ -61,7 +83,7 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
            } else if (data.Event === 'REGISTRATIONS_LIST') {
              setRegistrations(data.Payload || []);
            } else if (data.Event === 'DM_CREATED') {
-             window.location.href = `/chat/${data.Payload.ChatID}`;
+             if (navigate.current) navigate.current(`/chat/${data.Payload.ChatID}`);
            }
          } catch(e) {}
        };
@@ -109,7 +131,7 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
   }
 
   return (
-    <StoreContext.Provider value={{ user, feed, chats, registrations, login, logout, sendSocketMessage, removeFromFeed }}>
+    <StoreContext.Provider value={{ user, feed, chats, registrations, coords, login, logout, sendSocketMessage, removeFromFeed, refreshLocation }}>
       {children}
     </StoreContext.Provider>
   )

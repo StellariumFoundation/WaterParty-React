@@ -17,12 +17,25 @@ export function ChatRoomPage() {
   const [showManagement, setShowManagement] = useState(false);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
+  const [otherUser, setOtherUser] = useState<any | null>(null);
   
   const chat = chats.find(c => c.ID === chatId);
   const associatedParty = feed.find(p => p.ID === chat?.PartyID);
   const scrollRef = useRef<HTMLDivElement>(null);
   
   const isHost = associatedParty?.HostID === user?.ID;
+
+  useEffect(() => {
+    if (chat && !chat.IsGroup && user) {
+      const otherId = chat.ParticipantIDs?.find(id => id !== user.ID);
+      if (otherId) {
+        fetch(`/api/users/${otherId}`)
+          .then(res => res.json())
+          .then(data => setOtherUser(data))
+          .catch(err => console.error("Other user fetch failed", err));
+      }
+    }
+  }, [chat, user]);
 
   useEffect(() => {
     if (isHost && showManagement && associatedParty) {
@@ -134,11 +147,13 @@ export function ChatRoomPage() {
             className="flex items-center gap-3 cursor-pointer group"
           >
             <img 
-              src={chat.ImageUrl ? getAssetUrl(chat.ImageUrl) : "https://images.unsplash.com/photo-1542382103-6fdb3a652d8e?q=80&w=800&auto=format&fit=crop"} 
+              src={!chat.IsGroup && otherUser ? getAssetUrl(otherUser.Thumbnail || (otherUser.ProfilePhotos?.[0] || '')) : (chat.ImageUrl ? getAssetUrl(chat.ImageUrl) : "https://images.unsplash.com/photo-1542382103-6fdb3a652d8e?q=80&w=800&auto=format&fit=crop")} 
               className="w-10 h-10 rounded-full object-cover border border-white/10 group-hover:border-brand-accent transition-colors"
             />
             <div className="min-w-0">
-               <h3 className="text-sm font-bold text-white truncate max-w-[150px] group-hover:text-brand-accent transition-colors">{chat.Title}</h3>
+               <h3 className="text-sm font-bold text-white truncate max-w-[150px] group-hover:text-brand-accent transition-colors">
+                  {!chat.IsGroup && otherUser ? otherUser.RealName : chat.Title}
+               </h3>
                <p className="text-[9px] font-black text-brand-accent uppercase tracking-widest">{getETA()}</p>
             </div>
           </div>
@@ -172,20 +187,31 @@ export function ChatRoomPage() {
           {chat.RecentMessages?.map((msg: any, idx: number) => {
              const isMe = msg.SenderID === user?.ID;
              return (
-               <div key={idx} className={cn("flex flex-col mb-4", isMe ? "items-end" : "items-start")}>
-                 <div 
-                   onClick={() => !isMe && handleUserClick(msg.SenderID)}
-                   className={cn(
-                   "max-w-[85%] px-4 py-3 rounded-[24px] shadow-2xl relative",
-                   isMe 
-                     ? "bg-gradient-to-br from-[#FF3B5C] to-[#7042F8] text-white rounded-tr-none" 
-                     : "bg-[#1A1A24] text-white/90 rounded-tl-none border border-white/5 cursor-pointer hover:bg-[#252533] transition-colors"
-                 )}>
-                   <p className="text-[14px] leading-relaxed tracking-tight">{msg.Content}</p>
+               <div key={idx} className={cn("flex gap-3 mb-6", isMe ? "flex-row-reverse" : "flex-row")}>
+                 {!isMe && (
+                   <img 
+                     src={!chat.IsGroup && otherUser && msg.SenderID === otherUser.ID 
+                       ? getAssetUrl(otherUser.Thumbnail || (otherUser.ProfilePhotos?.[0] || '')) 
+                       : (chat.ImageUrl ? getAssetUrl(chat.ImageUrl) : "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=100")} 
+                     className="w-10 h-10 rounded-2xl object-cover border border-white/5 bg-white/5 shrink-0 cursor-pointer hover:border-brand-accent transition-all active:scale-95"
+                     onClick={() => handleUserClick(msg.SenderID)}
+                   />
+                 )}
+                 <div className={cn("flex flex-col max-w-[75%]", isMe ? "items-end" : "items-start")}>
+                   <div 
+                     onClick={() => !isMe && handleUserClick(msg.SenderID)}
+                     className={cn(
+                     "px-5 py-3.5 rounded-[28px] shadow-2xl relative",
+                     isMe 
+                       ? "bg-gradient-to-br from-[#FF3B5C] to-[#7042F8] text-white rounded-tr-none" 
+                       : "bg-[#1A1A24] text-white/90 rounded-tl-none border border-white/5 cursor-pointer hover:bg-[#252533] transition-colors"
+                   )}>
+                     <p className="text-[14px] font-medium leading-relaxed tracking-tight">{msg.Content}</p>
+                   </div>
+                   <p className={cn("text-[8px] mt-2 font-black uppercase tracking-widest text-white/20 px-1")}>
+                      {new Date(msg.Timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                   </p>
                  </div>
-                 <p className={cn("text-[8px] mt-1.5 font-black uppercase tracking-widest text-white/20 px-1")}>
-                    {new Date(msg.Timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                 </p>
                </div>
              );
           })}
@@ -207,112 +233,183 @@ export function ChatRoomPage() {
                transition={{ type: 'spring', damping: 30, stiffness: 250 }}
                className="absolute inset-0 bg-[#0A0B14] z-20 border-l border-white/5 flex flex-col overflow-y-auto scrollbar-hide"
              >
-                {associatedParty?.PartyPhotos?.[0] && (
-                   <div className="relative h-64 w-full overflow-hidden shrink-0">
-                      <img src={getAssetUrl(associatedParty.PartyPhotos[0])} className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-gradient-to-t from-[#0A0B14] via-transparent to-transparent" />
-                      <button 
-                        onClick={() => setShowInfo(false)}
-                        className="absolute top-6 right-6 w-10 h-10 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white/70 hover:text-white transition-colors border border-white/10"
-                      >
-                        <X size={20} />
-                      </button>
+                {chat.IsGroup ? (
+                   <>
+                    {associatedParty?.PartyPhotos?.[0] && (
+                       <div className="relative h-64 w-full overflow-hidden shrink-0">
+                          <img src={getAssetUrl(associatedParty.PartyPhotos[0])} className="w-full h-full object-cover" />
+                          <div className="absolute inset-0 bg-gradient-to-t from-[#0A0B14] via-transparent to-transparent" />
+                          <button 
+                            onClick={() => setShowInfo(false)}
+                            className="absolute top-6 right-6 w-10 h-10 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white/70 hover:text-white transition-colors border border-white/10"
+                          >
+                            <X size={20} />
+                          </button>
+                       </div>
+                    )}
+
+                    <div className="p-8 space-y-10">
+                       <div>
+                          <h2 className="text-3xl font-black text-white tracking-widest uppercase mb-2">
+                            {associatedParty?.Title || chat.Title}
+                          </h2>
+                          <div className="flex items-center gap-2 mb-6">
+                             <div className="w-2 h-2 rounded-full bg-brand-accent animate-pulse" />
+                             <p className="text-[10px] font-black text-brand-accent uppercase tracking-[0.2em]">{associatedParty?.PartyType || 'SESSION'}</p>
+                          </div>
+                          <p className="text-sm font-medium text-white/50 leading-relaxed uppercase tracking-tight">
+                             {associatedParty?.Description || 'NO DATA RECEIVED'}
+                          </p>
+                       </div>
+
+                       <div className="grid grid-cols-2 gap-4">
+                          <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5">
+                             <Calendar className="text-brand-accent mb-3" size={18} />
+                             <p className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-1">Timeline</p>
+                             <p className="text-xs font-bold text-white uppercase">
+                                {associatedParty?.StartTime ? new Date(associatedParty.StartTime).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) : 'TBD'}
+                             </p>
+                          </div>
+                          <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5">
+                             <MapPin className="text-brand-accent mb-3" size={18} />
+                             <p className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-1">Vibe City</p>
+                             <p className="text-xs font-bold text-white uppercase">{associatedParty?.City || 'LOCATION TBD'}</p>
+                          </div>
+                          <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5">
+                             <Users className="text-brand-accent mb-3" size={18} />
+                             <p className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-1">Sync count</p>
+                             <p className="text-xs font-bold text-white uppercase tracking-tight">
+                                {associatedParty?.CurrentGuestCount || 0} / {associatedParty?.MaxCapacity || 300} GUESTS
+                             </p>
+                          </div>
+                          <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5">
+                             <Clock className="text-brand-accent mb-3" size={18} />
+                             <p className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-1">Status</p>
+                             <p className="text-xs font-bold text-white uppercase">{getETA()}</p>
+                          </div>
+                       </div>
+
+                       <div className="bg-[#11131F] border border-white/5 rounded-[32px] p-6">
+                          <h4 className="text-[10px] font-black text-white tracking-[0.2em] uppercase mb-4 flex items-center gap-2">
+                             <MapPin size={12} className="text-brand-accent" /> EXACT COORDINATES
+                          </h4>
+                          <p className="text-[11px] font-bold text-white/40 leading-relaxed">
+                             {associatedParty?.Address || 'Visible only to confirmed attendees'}
+                          </p>
+                       </div>
+
+                       {associatedParty?.PartyPhotos && associatedParty.PartyPhotos.length > 1 && (
+                          <div>
+                             <h4 className="text-[10px] font-black text-white/20 tracking-[0.2em] uppercase mb-4">GALLERY</h4>
+                             <div className="grid grid-cols-2 gap-3">
+                                {associatedParty.PartyPhotos.slice(1).map((photo: string, i: number) => (
+                                   <img key={i} src={getAssetUrl(photo)} className="w-full aspect-square rounded-2xl object-cover border border-white/5" />
+                                ))}
+                             </div>
+                          </div>
+                       )}
+
+                       {isHost && associatedParty && (
+                          <div className="pt-8 border-t border-white/5 mt-6">
+                             {!isConfirmingDelete ? (
+                               <button 
+                                 onClick={() => setIsConfirmingDelete(true)}
+                                 className="w-full py-5 rounded-[24px] bg-red-500/10 border border-red-500/20 text-red-500 text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-3 active:scale-95 transition-all hover:bg-red-500/20"
+                               >
+                                  <Trash2 size={16} />
+                                  Dissolve Party Hub
+                               </button>
+                             ) : (
+                               <div className="flex flex-col gap-4">
+                                 <p className="text-red-500 text-[10px] text-center font-bold tracking-widest uppercase">Are you absolutely sure? This cannot be undone.</p>
+                                 <div className="flex gap-3">
+                                   <button 
+                                     onClick={handleDeleteParty}
+                                     className="flex-1 py-4 rounded-[20px] bg-red-500 border border-red-500 text-white text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center active:scale-95 transition-all outline-none"
+                                   >
+                                      YES, DISSOLVE
+                                   </button>
+                                   <button 
+                                     onClick={() => setIsConfirmingDelete(false)}
+                                     className="className-1 py-4 rounded-[20px] bg-white/5 border border-white/10 text-white text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center active:scale-95 transition-all hover:bg-white/10 outline-none"
+                                   >
+                                      CANCEL
+                                   </button>
+                                 </div>
+                               </div>
+                             )}
+                          </div>
+                       )}
+                    </div>
+                   </>
+                ) : (
+                   <div className="flex flex-col flex-1">
+                      {otherUser ? (
+                        <>
+                          <div className="relative h-96 w-full overflow-hidden shrink-0">
+                             <img src={getAssetUrl(otherUser.ProfilePhotos?.[0] || otherUser.Thumbnail || '') || "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=800"} className="w-full h-full object-cover" />
+                             <div className="absolute inset-0 bg-gradient-to-t from-[#0A0B14] via-transparent to-transparent" />
+                             <button 
+                               onClick={() => setShowInfo(false)}
+                               className="absolute top-6 right-6 w-10 h-10 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white/70 hover:text-white transition-colors border border-white/10"
+                             >
+                               <X size={20} />
+                             </button>
+                             <div className="absolute bottom-6 left-8 right-8">
+                                <h2 className="text-4xl font-black text-white tracking-widest uppercase mb-1 drop-shadow-lg">
+                                  {otherUser.RealName}
+                                </h2>
+                                <div className="flex gap-4">
+                                  {otherUser.Gender && <p className="text-sm font-bold text-brand-accent uppercase tracking-widest drop-shadow-md">{otherUser.Gender}</p>}
+                                  {otherUser.HeightCm > 0 && <p className="text-sm font-bold text-white/50 uppercase tracking-widest drop-shadow-md">{otherUser.HeightCm}CM</p>}
+                                </div>
+                             </div>
+                          </div>
+
+                          <div className="p-8 space-y-8 flex-1">
+                             {otherUser.Bio && (
+                               <div>
+                                  <h4 className="text-[10px] font-black text-white/20 tracking-[0.2em] uppercase mb-4">Bio</h4>
+                                  <p className="text-sm font-medium text-white/70 leading-relaxed tracking-tight">{otherUser.Bio}</p>
+                               </div>
+                             )}
+                             
+                             <div className="grid grid-cols-2 gap-4">
+                                {otherUser.JobTitle && (
+                                  <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5">
+                                     <p className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-1">Work</p>
+                                     <p className="text-xs font-bold text-white uppercase">{otherUser.JobTitle}</p>
+                                     {otherUser.Company && <p className="text-[10px] text-brand-accent font-bold mt-1 uppercase">@ {otherUser.Company}</p>}
+                                  </div>
+                                )}
+                                {otherUser.School && (
+                                  <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5">
+                                     <p className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-1">Education</p>
+                                     <p className="text-xs font-bold text-white uppercase">{otherUser.School}</p>
+                                     {otherUser.Degree && <p className="text-[10px] text-brand-accent font-bold mt-1 uppercase">{otherUser.Degree}</p>}
+                                  </div>
+                                )}
+                             </div>
+
+                             {otherUser.ProfilePhotos && otherUser.ProfilePhotos.length > 1 && (
+                                <div>
+                                   <h4 className="text-[10px] font-black text-white/20 tracking-[0.2em] uppercase mb-4">GALLERY</h4>
+                                   <div className="grid grid-cols-2 gap-3 pb-10">
+                                      {otherUser.ProfilePhotos.slice(1).map((photo: string, i: number) => (
+                                         <img key={i} src={getAssetUrl(photo)} className="w-full aspect-square rounded-2xl object-cover border border-white/5" />
+                                      ))}
+                                   </div>
+                                </div>
+                             )}
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex-1 flex flex-col items-center justify-center p-10 opacity-20">
+                           <p className="text-xs font-black uppercase tracking-[0.3em]">Syncing Profile...</p>
+                        </div>
+                      )}
                    </div>
                 )}
-
-                <div className="p-8 space-y-10">
-                   <div>
-                      <h2 className="text-3xl font-black text-white tracking-widest uppercase mb-2">
-                        {associatedParty?.Title || chat.Title}
-                      </h2>
-                      <div className="flex items-center gap-2 mb-6">
-                         <div className="w-2 h-2 rounded-full bg-brand-accent animate-pulse" />
-                         <p className="text-[10px] font-black text-brand-accent uppercase tracking-[0.2em]">{associatedParty?.PartyType || 'SESSION'}</p>
-                      </div>
-                      <p className="text-sm font-medium text-white/50 leading-relaxed uppercase tracking-tight">
-                         {associatedParty?.Description || 'NO DATA RECEIVED'}
-                      </p>
-                   </div>
-
-                   <div className="grid grid-cols-2 gap-4">
-                      <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5">
-                         <Calendar className="text-brand-accent mb-3" size={18} />
-                         <p className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-1">Timeline</p>
-                         <p className="text-xs font-bold text-white uppercase">
-                            {associatedParty?.StartTime ? new Date(associatedParty.StartTime).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) : 'TBD'}
-                         </p>
-                      </div>
-                      <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5">
-                         <MapPin className="text-brand-accent mb-3" size={18} />
-                         <p className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-1">Vibe City</p>
-                         <p className="text-xs font-bold text-white uppercase">{associatedParty?.City || 'LOCATION TBD'}</p>
-                      </div>
-                      <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5">
-                         <Users className="text-brand-accent mb-3" size={18} />
-                         <p className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-1">Sync count</p>
-                         <p className="text-xs font-bold text-white uppercase tracking-tight">
-                            {associatedParty?.CurrentGuestCount || 0} / {associatedParty?.MaxCapacity || 300} GUESTS
-                         </p>
-                      </div>
-                      <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5">
-                         <Clock className="text-brand-accent mb-3" size={18} />
-                         <p className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-1">Status</p>
-                         <p className="text-xs font-bold text-white uppercase">{getETA()}</p>
-                      </div>
-                   </div>
-
-                   <div className="bg-[#11131F] border border-white/5 rounded-[32px] p-6">
-                      <h4 className="text-[10px] font-black text-white tracking-[0.2em] uppercase mb-4 flex items-center gap-2">
-                         <MapPin size={12} className="text-brand-accent" /> EXACT COORDINATES
-                      </h4>
-                      <p className="text-[11px] font-bold text-white/40 leading-relaxed">
-                         {associatedParty?.Address || 'Visible only to confirmed attendees'}
-                      </p>
-                   </div>
-
-                   {associatedParty?.PartyPhotos && associatedParty.PartyPhotos.length > 1 && (
-                      <div>
-                         <h4 className="text-[10px] font-black text-white/20 tracking-[0.2em] uppercase mb-4">GALLERY</h4>
-                         <div className="grid grid-cols-2 gap-3">
-                            {associatedParty.PartyPhotos.slice(1).map((photo: string, i: number) => (
-                               <img key={i} src={getAssetUrl(photo)} className="w-full aspect-square rounded-2xl object-cover border border-white/5" />
-                            ))}
-                         </div>
-                      </div>
-                   )}
-
-                   {isHost && associatedParty && (
-                      <div className="pt-8 border-t border-white/5 mt-6">
-                         {!isConfirmingDelete ? (
-                           <button 
-                             onClick={() => setIsConfirmingDelete(true)}
-                             className="w-full py-5 rounded-[24px] bg-red-500/10 border border-red-500/20 text-red-500 text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-3 active:scale-95 transition-all hover:bg-red-500/20"
-                           >
-                              <Trash2 size={16} />
-                              Dissolve Party Hub
-                           </button>
-                         ) : (
-                           <div className="flex flex-col gap-4">
-                             <p className="text-red-500 text-[10px] text-center font-bold tracking-widest uppercase">Are you absolutely sure? This cannot be undone.</p>
-                             <div className="flex gap-3">
-                               <button 
-                                 onClick={handleDeleteParty}
-                                 className="flex-1 py-4 rounded-[20px] bg-red-500 border border-red-500 text-white text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center active:scale-95 transition-all outline-none"
-                               >
-                                  YES, DISSOLVE
-                               </button>
-                               <button 
-                                 onClick={() => setIsConfirmingDelete(false)}
-                                 className="flex-1 py-4 rounded-[20px] bg-white/5 border border-white/10 text-white text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center active:scale-95 transition-all hover:bg-white/10 outline-none"
-                               >
-                                  CANCEL
-                               </button>
-                             </div>
-                           </div>
-                         )}
-                      </div>
-                   )}
-                </div>
              </motion.div>
            )}
         </AnimatePresence>

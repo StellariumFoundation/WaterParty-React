@@ -4,10 +4,11 @@ import { WebSocketServer } from "ws";
 import http from "http";
 import path from "path";
 import bcrypt from "bcryptjs";
-import { DatabaseSync } from "node:sqlite";
+import Database from "better-sqlite3";
 
 // Setup DB
-const db = new DatabaseSync('./database.sqlite');
+const db = new Database('./database.sqlite');
+db.pragma('journal_mode = WAL');
 
 // Helper to check if a column exists and add it if missing
 function ensureColumn(tableName: string, columnName: string, columnDef: string) {
@@ -143,6 +144,24 @@ function getEnrichedParties(db: any) {
   });
 }
 
+function getEnrichedChats(db: any, userID: string) {
+  const allChats = db.prepare('SELECT * FROM chats').all();
+  return allChats.map((c: any) => {
+    const chat = mapChat(c);
+    if (!chat.IsGroup) {
+      const otherID = chat.ParticipantIDs?.find((id: string) => id !== userID);
+      if (otherID) {
+        const other = db.prepare('SELECT RealName, Thumbnail, ProfilePhotos FROM users WHERE ID = ?').get(otherID) as any;
+        if (other) {
+           chat.Title = other.RealName || chat.Title;
+           chat.ImageUrl = other.Thumbnail || parseJSON(other.ProfilePhotos)?.[0] || chat.ImageUrl;
+        }
+      }
+    }
+    return chat;
+  }).filter((c: any) => c.ParticipantIDs?.includes(userID));
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -232,10 +251,12 @@ async function startServer() {
   const getPartyByIdStmt = db.prepare('SELECT * FROM parties WHERE ID = ?');
   const updateUserStmt = db.prepare('UPDATE users SET RealName = ?, Bio = ?, Thumbnail = ?, ProfilePhotos = ?, Instagram = ?, Twitter = ?, Gender = ?, HeightCm = ?, JobTitle = ?, Company = ?, School = ?, Degree = ?, HostedCount = ?, HostingRating = ?, Reach = ? WHERE ID = ?');
 
-  wss.on('connection', (ws, req) => {
-    ws.on('message', (message) => {
+  wss.on('connection', (ws: any, req) => {
+    ws.on('message', (message: any) => {
        try {
           const { Event, Payload, Token } = JSON.parse(message.toString());
+          if (Token) ws.userID = Token;
+          
           const send = (ev: string, data: any) => {
              if (ws.readyState === ws.OPEN) {
                 ws.send(JSON.stringify({ Event: ev, Payload: data }));
@@ -250,11 +271,17 @@ async function startServer() {
              })
           };
 
+          const broadcastChats = () => {
+             wss.clients.forEach((client: any) => {
+                if (client.readyState === 1 && client.userID) {
+                   client.send(JSON.stringify({ Event: 'CHATS_LIST', Payload: getEnrichedChats(db, client.userID) }));
+                }
+             });
+          };
+
           switch (Event) {
              case 'GET_CHATS': {
-               const allChats = getChatsStmt.all() as any[];
-               const userChats = allChats.map(mapChat).filter((c: any) => c.ParticipantIDs?.includes(Token));
-               send('CHATS_LIST', userChats);
+               send('CHATS_LIST', getEnrichedChats(db, Token));
                break;
              }
              case 'GET_FEED': {
@@ -399,7 +426,7 @@ async function startServer() {
                       );
                    }
                    const updatedChats = getChatsStmt.all().map(mapChat) as any[];
-                   broadcast('CHATS_LIST', updatedChats);
+                   broadcastChats();
                    send('DM_CREATED', { ChatID: chatID });
                 }
                 break;
