@@ -165,7 +165,7 @@ export function CreatePartyPage() {
   };
 
   return (
-    <div className="h-full w-full bg-transparent flex flex-col overflow-y-auto pb-[120px] pt-6 px-6 scrollbar-hide">
+    <div className="h-full w-full bg-transparent flex flex-col overflow-y-auto pt-6 px-6 scrollbar-hide pb-10">
       
       {/* TILE HEADER */}
       <div className="mb-8">
@@ -304,7 +304,7 @@ export function CreatePartyPage() {
           </div>
           <div className="bg-[#11131F] border border-white/5 rounded-[32px] p-4 space-y-4">
              <div className="h-[300px] w-full bg-[#f8f9fa] rounded-2xl overflow-hidden shadow-inner border border-white/5 z-0">
-               <MapContainer center={[40.7128, -74.0060]} zoom={13} scrollWheelZoom={false} style={{ height: '100%', width: '100%' }}>
+               <MapContainer center={mapPosition ? [mapPosition.lat, mapPosition.lng] : [40.7128, -74.0060]} zoom={13} scrollWheelZoom={false} style={{ height: '100%', width: '100%' }}>
                   <TileLayer
                     url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
