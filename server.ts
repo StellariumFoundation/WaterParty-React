@@ -59,6 +59,13 @@ db.exec(`
     IsGroup INTEGER,
     ParticipantIDs TEXT
   );
+  CREATE TABLE IF NOT EXISTS registrations (
+    ID TEXT PRIMARY KEY,
+    PartyID TEXT,
+    UserID TEXT,
+    Status TEXT, -- 'PENDING', 'APPROVED'
+    Timestamp TEXT
+  );
 `);
 
 const parseJSON = (str: any, def: any = []) => { 
@@ -72,6 +79,7 @@ const parseJSON = (str: any, def: any = []) => {
 const mapUser = (row: any) => ({ ...row, ProfilePhotos: parseJSON(row.ProfilePhotos) });
 const mapParty = (row: any) => ({ ...row, PartyPhotos: parseJSON(row.PartyPhotos), VibeTags: parseJSON(row.VibeTags), Rules: parseJSON(row.Rules) });
 const mapChat = (row: any) => ({ ...row, RecentMessages: parseJSON(row.RecentMessages), ParticipantIDs: parseJSON(row.ParticipantIDs), IsGroup: Boolean(row.IsGroup) });
+const mapRegistration = (row: any) => ({ ...row });
 
 async function startServer() {
   const app = express();
@@ -233,8 +241,20 @@ async function startServer() {
                send('FEED_UPDATE', dbParties.map(mapParty));
                break;
              }
-             case 'SWIPE':
-               break;
+             case 'SWIPE': {
+                const { PartyID, Direction } = Payload;
+                if (Direction === 'right') {
+                   // Create a registration request
+                   const regID = `reg_${Date.now()}_${Token}`;
+                   const existing = db.prepare('SELECT * FROM registrations WHERE PartyID = ? AND UserID = ?').get(PartyID, Token);
+                   if (!existing) {
+                      db.prepare('INSERT INTO registrations (ID, PartyID, UserID, Status, Timestamp) VALUES (?, ?, ?, ?, ?)').run(
+                         regID, PartyID, Token, 'PENDING', new Date().toISOString()
+                      );
+                   }
+                }
+                break;
+             }
              case 'CREATE_PARTY': {
                // Server-side validation
                if (!Payload.Title?.trim() || Payload.Title.length < 3) {
@@ -335,6 +355,69 @@ async function startServer() {
                       JSON.stringify(updatedMessages), ChatID
                    );
                    
+                   const refreshedChats = db.prepare('SELECT * FROM chats').all().map(mapChat);
+                   wss.clients.forEach(client => {
+                      if (client.readyState === 1) { 
+                         client.send(JSON.stringify({ Event: 'CHATS_LIST', Payload: refreshedChats }));
+                      }
+                   });
+                }
+                break;
+             }
+             case 'GET_REGISTRATIONS': {
+                const { PartyID } = Payload;
+                const regs = db.prepare('SELECT registrations.*, users.RealName, users.Thumbnail as UserThumbnail FROM registrations JOIN users ON registrations.UserID = users.ID WHERE PartyID = ?').all(PartyID);
+                send('REGISTRATIONS_LIST', regs);
+                break;
+             }
+             case 'APPROVE_JOIN_REQUEST': {
+                const { RegistrationID } = Payload;
+                const reg = db.prepare('SELECT * FROM registrations WHERE ID = ?').get(RegistrationID) as any;
+                if (reg && reg.Status === 'PENDING') {
+                   db.prepare('UPDATE registrations SET Status = ? WHERE ID = ?').run('APPROVED', RegistrationID);
+                   const party = db.prepare('SELECT * FROM parties WHERE ID = ?').get(reg.PartyID) as any;
+                   if (party) {
+                      const chat = db.prepare('SELECT * FROM chats WHERE ID = ?').get(party.ChatRoomID) as any;
+                      if (chat) {
+                         const pIDs = JSON.parse(chat.ParticipantIDs);
+                         if (!pIDs.includes(reg.UserID)) {
+                            pIDs.push(reg.UserID);
+                            db.prepare('UPDATE chats SET ParticipantIDs = ? WHERE ID = ?').run(JSON.stringify(pIDs), party.ChatRoomID);
+                            db.prepare('UPDATE parties SET CurrentGuestCount = CurrentGuestCount + 1 WHERE ID = ?').run(reg.PartyID);
+                         }
+                      }
+                   }
+                   const regs = db.prepare('SELECT registrations.*, users.RealName, users.Thumbnail as UserThumbnail FROM registrations JOIN users ON registrations.UserID = users.ID WHERE PartyID = ?').all(reg.PartyID);
+                   send('REGISTRATIONS_LIST', regs);
+                   const refreshedParties = db.prepare('SELECT * FROM parties').all().map(mapParty);
+                   wss.clients.forEach(client => {
+                      if (client.readyState === 1) { 
+                         client.send(JSON.stringify({ Event: 'FEED_UPDATE', Payload: refreshedParties }));
+                      }
+                   });
+                   const refreshedChats = db.prepare('SELECT * FROM chats').all().map(mapChat);
+                   wss.clients.forEach(client => {
+                      if (client.readyState === 1) { 
+                         client.send(JSON.stringify({ Event: 'CHATS_LIST', Payload: refreshedChats }));
+                      }
+                   });
+                }
+                break;
+             }
+             case 'DELETE_PARTY': {
+                const { PartyID } = Payload;
+                const party = db.prepare('SELECT * FROM parties WHERE ID = ?').get(PartyID) as any;
+                if (party && party.HostID === Token) {
+                   db.prepare('DELETE FROM parties WHERE ID = ?').run(PartyID);
+                   db.prepare('DELETE FROM chats WHERE ID = ?').run(party.ChatRoomID);
+                   db.prepare('DELETE FROM registrations WHERE PartyID = ?').run(PartyID);
+                   
+                   const refreshedParties = db.prepare('SELECT * FROM parties').all().map(mapParty);
+                   wss.clients.forEach(client => {
+                      if (client.readyState === 1) { 
+                         client.send(JSON.stringify({ Event: 'FEED_UPDATE', Payload: refreshedParties }));
+                      }
+                   });
                    const refreshedChats = db.prepare('SELECT * FROM chats').all().map(mapChat);
                    wss.clients.forEach(client => {
                       if (client.readyState === 1) { 

@@ -6,6 +6,7 @@ interface StoreContextType {
   user: User | null;
   feed: Party[];
   chats: ChatRoom[];
+  registrations: any[];
   login: (u: User) => void;
   logout: () => void;
   sendSocketMessage: (event: string, payload: any) => void;
@@ -18,6 +19,7 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [feed, setFeed] = useState<Party[]>([]);
   const [chats, setChats] = useState<ChatRoom[]>([]);
+  const [registrations, setRegistrations] = useState<any[]>([]);
   const socketRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
@@ -56,6 +58,8 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
            } else if (data.Event === 'PROFILE_UPDATED') {
              setUser(data.Payload);
              localStorage.setItem('waterparty_user', JSON.stringify(data.Payload));
+           } else if (data.Event === 'REGISTRATIONS_LIST') {
+             setRegistrations(data.Payload || []);
            }
          } catch(e) {}
        };
@@ -103,7 +107,7 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
   }
 
   return (
-    <StoreContext.Provider value={{ user, feed, chats, login, logout, sendSocketMessage, removeFromFeed }}>
+    <StoreContext.Provider value={{ user, feed, chats, registrations, login, logout, sendSocketMessage, removeFromFeed }}>
       {children}
     </StoreContext.Provider>
   )
