@@ -15,6 +15,8 @@ export function ChatRoomPage() {
   const [message, setMessage] = useState('');
   const [showInfo, setShowInfo] = useState(false);
   const [showManagement, setShowManagement] = useState(false);
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<any | null>(null);
   
   const chat = chats.find(c => c.ID === chatId);
   const associatedParty = feed.find(p => p.ID === chat?.PartyID);
@@ -59,12 +61,29 @@ export function ChatRoomPage() {
     setMessage('');
   };
 
+  const handleUserClick = async (userId: string) => {
+    if (userId === user?.ID) return;
+    try {
+      const res = await fetch(`/api/users/${userId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setSelectedUser(data);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDM = () => {
+    if (!selectedUser) return;
+    sendSocketMessage('CREATE_DM', { TargetUserID: selectedUser.ID });
+    setSelectedUser(null);
+  };
+
   const handleDeleteParty = () => {
     if (!associatedParty) return;
-    if (window.confirm("ARE YOU ABSOLUTELY SURE? This will permanently delete the party, clear all chat records, and dissolve the guest list. This action cannot be undone.")) {
-       sendSocketMessage('DELETE_PARTY', { PartyID: associatedParty.ID });
-       navigate('/messages');
-    }
+    sendSocketMessage('DELETE_PARTY', { PartyID: associatedParty.ID });
+    navigate('/messages');
   };
 
   const getETA = () => {
@@ -154,11 +173,13 @@ export function ChatRoomPage() {
              const isMe = msg.SenderID === user?.ID;
              return (
                <div key={idx} className={cn("flex flex-col mb-4", isMe ? "items-end" : "items-start")}>
-                 <div className={cn(
+                 <div 
+                   onClick={() => !isMe && handleUserClick(msg.SenderID)}
+                   className={cn(
                    "max-w-[85%] px-4 py-3 rounded-[24px] shadow-2xl relative",
                    isMe 
                      ? "bg-gradient-to-br from-[#FF3B5C] to-[#7042F8] text-white rounded-tr-none" 
-                     : "bg-[#1A1A24] text-white/90 rounded-tl-none border border-white/5"
+                     : "bg-[#1A1A24] text-white/90 rounded-tl-none border border-white/5 cursor-pointer hover:bg-[#252533] transition-colors"
                  )}>
                    <p className="text-[14px] leading-relaxed tracking-tight">{msg.Content}</p>
                  </div>
@@ -262,13 +283,33 @@ export function ChatRoomPage() {
 
                    {isHost && associatedParty && (
                       <div className="pt-8 border-t border-white/5 mt-6">
-                         <button 
-                           onClick={handleDeleteParty}
-                           className="w-full py-5 rounded-[24px] bg-red-500/10 border border-red-500/20 text-red-500 text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-3 active:scale-95 transition-all hover:bg-red-500/20"
-                         >
-                            <Trash2 size={16} />
-                            Dissolve Party Hub
-                         </button>
+                         {!isConfirmingDelete ? (
+                           <button 
+                             onClick={() => setIsConfirmingDelete(true)}
+                             className="w-full py-5 rounded-[24px] bg-red-500/10 border border-red-500/20 text-red-500 text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-3 active:scale-95 transition-all hover:bg-red-500/20"
+                           >
+                              <Trash2 size={16} />
+                              Dissolve Party Hub
+                           </button>
+                         ) : (
+                           <div className="flex flex-col gap-4">
+                             <p className="text-red-500 text-[10px] text-center font-bold tracking-widest uppercase">Are you absolutely sure? This cannot be undone.</p>
+                             <div className="flex gap-3">
+                               <button 
+                                 onClick={handleDeleteParty}
+                                 className="flex-1 py-4 rounded-[20px] bg-red-500 border border-red-500 text-white text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center active:scale-95 transition-all outline-none"
+                               >
+                                  YES, DISSOLVE
+                               </button>
+                               <button 
+                                 onClick={() => setIsConfirmingDelete(false)}
+                                 className="flex-1 py-4 rounded-[20px] bg-white/5 border border-white/10 text-white text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center active:scale-95 transition-all hover:bg-white/10 outline-none"
+                               >
+                                  CANCEL
+                               </button>
+                             </div>
+                           </div>
+                         )}
                       </div>
                    )}
                 </div>
@@ -337,6 +378,74 @@ export function ChatRoomPage() {
                          </div>
                       ))
                    )}
+                </div>
+             </motion.div>
+           )}
+         </AnimatePresence>
+
+        {/* User Profile Overlay */}
+        <AnimatePresence>
+           {selectedUser && (
+             <motion.div 
+               initial={{ y: '100%' }}
+               animate={{ y: 0 }}
+               exit={{ y: '100%' }}
+               transition={{ type: 'spring', damping: 30, stiffness: 250 }}
+               className="absolute inset-0 bg-[#0A0B14] z-[60] flex flex-col overflow-y-auto scrollbar-hide"
+             >
+                <div className="relative h-96 w-full overflow-hidden shrink-0">
+                   <img src={getAssetUrl(selectedUser.ProfilePhotos?.[0] || selectedUser.Thumbnail || '') || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=1000"} className="w-full h-full object-cover" />
+                   <div className="absolute inset-0 bg-gradient-to-t from-[#0A0B14] via-[#0A0B14]/40 to-transparent" />
+                   <button 
+                     onClick={() => setSelectedUser(null)}
+                     className="absolute top-6 left-6 w-10 h-10 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white/70 hover:text-white transition-colors border border-white/10"
+                   >
+                     <ChevronLeft size={20} />
+                   </button>
+                   <div className="absolute bottom-6 left-8 right-8">
+                      <h2 className="text-4xl font-black text-white tracking-widest uppercase mb-1 drop-shadow-lg">
+                        {selectedUser.RealName}
+                      </h2>
+                      <div className="flex gap-4">
+                        {selectedUser.Gender && <p className="text-sm font-bold text-brand-accent uppercase tracking-widest drop-shadow-md">{selectedUser.Gender}</p>}
+                      </div>
+                   </div>
+                </div>
+
+                <div className="p-8 space-y-8 flex-1">
+                   {selectedUser.Bio && (
+                     <div>
+                        <h4 className="text-[10px] font-black text-white/20 tracking-[0.2em] uppercase mb-4">Bio</h4>
+                        <p className="text-sm font-medium text-white/70 leading-relaxed tracking-tight">{selectedUser.Bio}</p>
+                     </div>
+                   )}
+                   
+                   <div className="grid grid-cols-2 gap-4">
+                      {selectedUser.JobTitle && (
+                        <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5">
+                           <p className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-1">Work</p>
+                           <p className="text-xs font-bold text-white uppercase">{selectedUser.JobTitle}</p>
+                           {selectedUser.Company && <p className="text-[10px] text-brand-accent font-bold mt-1 uppercase">@ {selectedUser.Company}</p>}
+                        </div>
+                      )}
+                      {selectedUser.School && (
+                        <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5">
+                           <p className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-1">Education</p>
+                           <p className="text-xs font-bold text-white uppercase">{selectedUser.School}</p>
+                           {selectedUser.Degree && <p className="text-[10px] text-brand-accent font-bold mt-1 uppercase">{selectedUser.Degree}</p>}
+                        </div>
+                      )}
+                   </div>
+                </div>
+
+                <div className="p-6 sticky bottom-0 bg-gradient-to-t from-[#0A0B14] via-[#0A0B14] to-transparent pt-10">
+                   <button 
+                     onClick={handleDM}
+                     className="w-full py-5 rounded-[24px] bg-white text-black text-[12px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-3 active:scale-95 transition-all hover:bg-white/90"
+                   >
+                      <Send size={16} />
+                      Send Message
+                   </button>
                 </div>
              </motion.div>
            )}

@@ -76,58 +76,37 @@ const parseJSON = (str: any, def: any = []) => {
   } 
 };
 
+function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371; // radius of earth in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
 const mapUser = (row: any) => ({ ...row, ProfilePhotos: parseJSON(row.ProfilePhotos) });
 const mapParty = (row: any) => ({ ...row, PartyPhotos: parseJSON(row.PartyPhotos), VibeTags: parseJSON(row.VibeTags), Rules: parseJSON(row.Rules) });
 const mapChat = (row: any) => ({ ...row, RecentMessages: parseJSON(row.RecentMessages), ParticipantIDs: parseJSON(row.ParticipantIDs), IsGroup: Boolean(row.IsGroup) });
 const mapRegistration = (row: any) => ({ ...row });
 
+function getEnrichedParties(db: any) {
+  const parties = db.prepare('SELECT * FROM parties').all().map(mapParty);
+  return parties.map((p: any) => {
+    const hostData = db.prepare('SELECT RealName, Thumbnail, ProfilePhotos FROM users WHERE ID = ?').get(p.HostID) as any;
+    if (hostData) {
+       p.HostName = hostData.RealName || "";
+       p.HostThumbnail = hostData.Thumbnail || parseJSON(hostData.ProfilePhotos)?.[0] || "";
+    }
+    return p;
+  });
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
-
-  // Seed DB if empty
-  const existingPartiesStmt = db.prepare('SELECT * FROM parties');
-  const existingParties = existingPartiesStmt.all();
-  
-  if (existingParties.length === 0) {
-    const dummyId = 'party_1';
-    
-    // Insert party
-    const insertParty = db.prepare(
-      `INSERT INTO parties (ID, HostID, Title, Description, PartyPhotos, StartTime, DurationHours, Status, Address, City, GeoLat, GeoLon, MaxCapacity, CurrentGuestCount, VibeTags, Rules, ChatRoomID, Thumbnail, CrowdfundTarget, CrowdfundCurrent, PartyType)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    );
-    insertParty.run(
-        dummyId, 
-        'host_xyz', 
-        'Neon Rooftop Bash', 
-        'An exclusive rooftop experience.', 
-        JSON.stringify(['https://images.unsplash.com/photo-1574169208507-84376144848b?q=80&w=800&auto=format&fit=crop']), 
-        new Date(Date.now() + 4 * 3600 * 1000).toISOString(), 
-        4, 
-        'OPEN', 
-        '123 Fake St', 
-        'Brooklyn, NY', 
-        40.7, 
-        -73.9, 
-        50, 
-        15, 
-        JSON.stringify(['Rooftop', 'House Music']), 
-        JSON.stringify(['BYOB', 'Good Vibes Only']), 
-        'chat_1', 
-        'https://images.unsplash.com/photo-1574169208507-84376144848b?q=80&w=800&auto=format&fit=crop',
-        0,
-        0,
-        'ROOFTOP'
-    );
-
-    const insertChat = db.prepare(
-      `INSERT INTO chats (ID, PartyID, Title, ImageUrl, RecentMessages, IsGroup, ParticipantIDs) VALUES (?, ?, ?, ?, ?, ?, ?)`
-    );
-    insertChat.run(
-        'chat_1', dummyId, 'Neon Rooftop Bash', 'https://images.unsplash.com/photo-1574169208507-84376144848b?q=80&w=800&auto=format&fit=crop', JSON.stringify([]), 1, JSON.stringify(['host_xyz'])
-    );
-  }
 
   app.use(express.json());
 
@@ -137,6 +116,14 @@ async function startServer() {
   const insertUserStmt = db.prepare(
     'INSERT INTO users (ID, RealName, Email, Password, ProfilePhotos, TrustScore, Thumbnail, Bio, Instagram, Twitter, Gender, HeightCm, JobTitle, Company, School, Degree) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
   );
+
+  app.get('/api/users/:id', (req, res) => {
+    const userRow = getUserByIdStmt.get(req.params.id) as any;
+    if (!userRow) return res.status(404).json({ error: "User not found" });
+    const safeUser = { ...userRow };
+    delete safeUser.Password;
+    res.json(mapUser(safeUser));
+  });
 
   app.post('/login', (req, res) => {
     const { email, password } = req.body;
@@ -237,8 +224,20 @@ async function startServer() {
                break;
              }
              case 'GET_FEED': {
-               const dbParties = getPartiesStmt.all();
-               send('FEED_UPDATE', dbParties.map(mapParty));
+               const { Lat, Lon } = Payload || {};
+               let mappedParties = getEnrichedParties(db);
+               
+               if (typeof Lat === 'number' && typeof Lon === 'number') {
+                 // Sort such that the CLOSEST party is at the end of the array
+                 // because the frontend renders the last array element on top of the visual stack
+                 mappedParties.sort((a: any, b: any) => {
+                   const distA = getDistance(Lat, Lon, a.GeoLat || 0, a.GeoLon || 0);
+                   const distB = getDistance(Lat, Lon, b.GeoLat || 0, b.GeoLon || 0);
+                   return distB - distA; // Descending distance (farthest first, closest last)
+                 });
+               }
+               
+               send('FEED_UPDATE', mappedParties);
                break;
              }
              case 'SWIPE': {
@@ -266,11 +265,23 @@ async function startServer() {
                if (!Payload.City?.trim()) {
                   return send('ERROR', { message: 'City is required' });
                }
-               if (Number(Payload.MaxCapacity) > 300) {
-                  return send('ERROR', { message: 'Max capacity is 300' });
+               if (!Payload.Address?.trim()) {
+                  return send('ERROR', { message: 'Address is required' });
                }
-               if (Number(Payload.DurationHours) > 6) {
-                  return send('ERROR', { message: 'Max duration is 6 hours' });
+               if (!Payload.PartyType?.trim()) {
+                  return send('ERROR', { message: 'Party vibe/type is required' });
+               }
+               if (!Payload.StartTime) {
+                  return send('ERROR', { message: 'Start time is required' });
+               }
+               if (!Payload.GeoLat || !Payload.GeoLon) {
+                  return send('ERROR', { message: 'Map location is required' });
+               }
+               if (Number(Payload.MaxCapacity) <= 0 || Number(Payload.MaxCapacity) > 300) {
+                  return send('ERROR', { message: 'Capacity must be between 1 and 300' });
+               }
+               if (Number(Payload.DurationHours) <= 0 || Number(Payload.DurationHours) > 6) {
+                  return send('ERROR', { message: 'Duration must be between 1 and 6 hours' });
                }
                if (!Payload.PartyPhotos?.length) {
                   return send('ERROR', { message: 'At least one photo required' });
@@ -312,8 +323,8 @@ async function startServer() {
                if (newlyCreatedParty) send('PARTY_CREATED', mapParty(newlyCreatedParty));
 
                // Broadcast updated feed
-               const updatedParties = getPartiesStmt.all();
-               broadcast('FEED_UPDATE', updatedParties.map(mapParty));
+               const updatedParties = getEnrichedParties(db);
+               broadcast('FEED_UPDATE', updatedParties);
 
                // Send user their updated chats
                const updatedChats = getChatsStmt.all();
@@ -339,6 +350,35 @@ async function startServer() {
                const updatedUser = getUserByIdStmt.get(Token);
                if(updatedUser) send('PROFILE_UPDATED', mapUser(updatedUser));
                break;
+             }
+             case 'CREATE_DM': {
+                const { TargetUserID } = Payload;
+                const me = getUserByIdStmt.get(Token) as any;
+                const other = getUserByIdStmt.get(TargetUserID) as any;
+                if (me && other) {
+                   const allChats = getChatsStmt.all().map(mapChat);
+                   const existing = allChats.find((c: any) => c.IsGroup === false && c.ParticipantIDs.includes(Token) && c.ParticipantIDs.includes(TargetUserID));
+                   
+                   let chatID;
+                   if (existing) {
+                      chatID = existing.ID;
+                   } else {
+                      chatID = 'dm_' + Date.now() + '_' + Token + '_' + TargetUserID;
+                      // Avatar logic: For a DM, we can just use empty string or a fallback
+                      insertChatWSRoomStmt.run(
+                        chatID, 'DM', `${me.RealName} & ${other.RealName}`, '', JSON.stringify([]), 0, JSON.stringify([Token, TargetUserID])
+                      );
+                   }
+                   // Send everyone updated chats who is a participant
+                   const updatedChats = getChatsStmt.all().map(mapChat);
+                   wss.clients.forEach(client => {
+                      if (client.readyState === 1) {
+                         client.send(JSON.stringify({ Event: 'CHATS_LIST', Payload: updatedChats })); // In a real app we'd filter
+                      }
+                   });
+                   send('DM_CREATED', { ChatID: chatID });
+                }
+                break;
              }
              case 'SEND_MESSAGE': {
                 const { ChatID, Content } = Payload;
@@ -389,7 +429,7 @@ async function startServer() {
                    }
                    const regs = db.prepare('SELECT registrations.*, users.RealName, users.Thumbnail as UserThumbnail FROM registrations JOIN users ON registrations.UserID = users.ID WHERE PartyID = ?').all(reg.PartyID);
                    send('REGISTRATIONS_LIST', regs);
-                   const refreshedParties = db.prepare('SELECT * FROM parties').all().map(mapParty);
+                   const refreshedParties = getEnrichedParties(db);
                    wss.clients.forEach(client => {
                       if (client.readyState === 1) { 
                          client.send(JSON.stringify({ Event: 'FEED_UPDATE', Payload: refreshedParties }));
@@ -412,7 +452,7 @@ async function startServer() {
                    db.prepare('DELETE FROM chats WHERE ID = ?').run(party.ChatRoomID);
                    db.prepare('DELETE FROM registrations WHERE PartyID = ?').run(PartyID);
                    
-                   const refreshedParties = db.prepare('SELECT * FROM parties').all().map(mapParty);
+                   const refreshedParties = getEnrichedParties(db);
                    wss.clients.forEach(client => {
                       if (client.readyState === 1) { 
                          client.send(JSON.stringify({ Event: 'FEED_UPDATE', Payload: refreshedParties }));

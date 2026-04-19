@@ -60,6 +60,8 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
              localStorage.setItem('waterparty_user', JSON.stringify(data.Payload));
            } else if (data.Event === 'REGISTRATIONS_LIST') {
              setRegistrations(data.Payload || []);
+           } else if (data.Event === 'DM_CREATED') {
+             window.location.href = `/chat/${data.Payload.ChatID}`;
            }
          } catch(e) {}
        };

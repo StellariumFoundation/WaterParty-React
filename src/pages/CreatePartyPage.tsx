@@ -24,6 +24,12 @@ function LocationMarker({ position, setPosition }: { position: L.LatLng | null, 
     },
   });
 
+  useEffect(() => {
+    if (position) {
+       map.flyTo(position, 14);
+    }
+  }, [position, map]);
+
   return position === null ? null : (
     <Marker position={position} />
   );
@@ -40,7 +46,7 @@ export function CreatePartyPage() {
   const [description, setDescription] = useState('');
   const [city, setCity] = useState('');
   const [address, setAddress] = useState('');
-  const [partyType, setPartyType] = useState('RAVE');
+  const [partyType, setPartyType] = useState('');
   const [customType, setCustomType] = useState('');
   const [partyPhotos, setPartyPhotos] = useState<string[]>([]);
   const [partyDate, setPartyDate] = useState('');
@@ -62,7 +68,8 @@ export function CreatePartyPage() {
     if (!city.trim()) errs.push("City is required");
     if (!address.trim()) errs.push("Full address is required");
     if (partyPhotos.length === 0) errs.push("At least one photo is required");
-    if (guestLimit > 300) errs.push("Max capacity is 300");
+    if (!partyType.trim()) errs.push("Party vibe type is required");
+    if (partyType === 'OTHER' && !customType.trim()) errs.push("Custom vibe type is required");
     if (duration > 6) errs.push("Max duration is 6 hours");
     if (!mapPosition) errs.push("Please pick a location on the map");
     
@@ -124,6 +131,16 @@ export function CreatePartyPage() {
   };
 
   useEffect(() => {
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition((pos) => {
+        setMapPosition(L.latLng(pos.coords.latitude, pos.coords.longitude));
+      }, (err) => {
+        console.warn("Geolocation disabled or blocked:", err);
+      });
+    }
+  }, []);
+
+  useEffect(() => {
     if (mapPosition) {
       handleReverseGeocode(mapPosition.lat, mapPosition.lng);
     }
@@ -148,7 +165,7 @@ export function CreatePartyPage() {
   };
 
   return (
-    <div className="h-full w-full bg-transparent flex flex-col overflow-y-auto pb-48 pt-6 px-6 scrollbar-hide">
+    <div className="h-full w-full bg-transparent flex flex-col overflow-y-auto pb-[120px] pt-6 px-6 scrollbar-hide">
       
       {/* TILE HEADER */}
       <div className="mb-8">
@@ -465,27 +482,27 @@ export function CreatePartyPage() {
            />
         </section>
 
-      </div>
+         <div className="mt-12 flex justify-center w-full">
+            <button 
+              onClick={handlePublish} 
+              disabled={isSubmitting}
+              className={cn(
+                "w-full py-5 rounded-[24px] bg-gradient-to-r from-brand-primary to-brand-secondary text-white font-black text-xs tracking-[0.2em] shadow-2xl transition-all uppercase flex items-center justify-center gap-3",
+                isSubmitting ? "opacity-70 cursor-not-allowed" : "shadow-brand-primary/40 active:scale-95"
+              )}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="animate-spin" size={18} /> LAUNCHING...
+                </>
+              ) : (
+                <>
+                  <Sparkles size={18} /> LAUNCH PARTY
+                </>
+              )}
+            </button>
+         </div>
 
-      <div className="fixed bottom-[88px] left-0 right-0 p-6 bg-gradient-to-t from-[#0A0B14] via-[#0A0B14]/95 to-transparent z-40 max-w-md mx-auto">
-        <button 
-          onClick={handlePublish} 
-          disabled={isSubmitting}
-          className={cn(
-            "w-full py-5 rounded-[24px] bg-gradient-to-r from-brand-primary to-brand-secondary text-white font-black text-xs tracking-[0.2em] shadow-2xl transition-all uppercase flex items-center justify-center gap-3",
-            isSubmitting ? "opacity-70 cursor-not-allowed" : "shadow-brand-primary/40 active:scale-95"
-          )}
-        >
-          {isSubmitting ? (
-            <>
-              <Loader2 className="animate-spin" size={18} /> LAUNCHING...
-            </>
-          ) : (
-            <>
-              <Sparkles size={18} /> LAUNCH PARTY
-            </>
-          )}
-        </button>
       </div>
 
     </div>

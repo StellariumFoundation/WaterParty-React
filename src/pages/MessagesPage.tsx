@@ -99,7 +99,7 @@ export function MessagesPage() {
                      >
                         <div className="flex items-center gap-4 mb-4">
                            <div className="relative">
-                              <img src={displayImage} className="w-16 h-16 rounded-2xl object-cover shrink-0 border border-white/10" />
+                              <img src={displayImage || "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?q=80&w=1000"} className="w-16 h-16 rounded-2xl object-cover shrink-0 border border-white/10" />
                               <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-brand-accent border-2 border-[#11131F] shadow-[0_0_8px_rgba(0,210,255,0.6)]" />
                            </div>
                            <div className="flex-1 min-w-0">

@@ -1,13 +1,36 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Check, Waves } from 'lucide-react';
+import { X, Check, Waves, MapPin, Users, Calendar, Clock, ChevronLeft, Send, Info } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useStore } from '../lib/Store';
 import { getAssetUrl } from '../lib/constants';
 
 export function SwipePage() {
   const { feed, user, sendSocketMessage, removeFromFeed } = useStore();
+  const navigate = useNavigate();
   const [swipeDir, setSwipeDir] = useState<{ [key: string]: 'left' | 'right' | null }>({});
+  const [selectedParty, setSelectedParty] = useState<any | null>(null);
+  const [selectedUser, setSelectedUser] = useState<any | null>(null);
+
+  const handleUserClick = async (userId: string) => {
+    if (userId === user?.ID) return;
+    try {
+      const res = await fetch(`/api/users/${userId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setSelectedUser(data);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDM = () => {
+    if (!selectedUser) return;
+    sendSocketMessage('CREATE_DM', { TargetUserID: selectedUser.ID });
+    setSelectedUser(null);
+  };
 
   useEffect(() => {
     if ('geolocation' in navigator) {
@@ -70,7 +93,26 @@ export function SwipePage() {
                 : party.Thumbnail ? getAssetUrl(party.Thumbnail) : "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?q=80&w=1000";
                 
               const date = party.StartTime ? new Date(party.StartTime) : new Date();
-              const dateStr = `${date.getDate()}/${date.getMonth()+1} ${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`;
+              
+              const now = new Date();
+              const diffMs = date.getTime() - now.getTime();
+              let dateStr = "";
+              if (diffMs < 0 && diffMs > -4 * 3600 * 1000) {
+                 dateStr = "HAPPENING NOW";
+              } else if (diffMs < 0) {
+                 dateStr = "ENDED";
+              } else {
+                 const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                 const diffDays = Math.floor(diffHours / 24);
+                 if (diffDays > 0) {
+                   dateStr = `IN ${diffDays} DAY${diffDays > 1 ? 'S' : ''}`;
+                 } else if (diffHours > 0) {
+                   dateStr = `IN ${diffHours} HOUR${diffHours > 1 ? 'S' : ''}`;
+                 } else {
+                   const diffMins = Math.floor(diffMs / (1000 * 60));
+                   dateStr = `IN ${diffMins} MIN${diffMins > 1 ? 'S' : ''}`;
+                 }
+              }
               
               const exitX = swipeDir[party.ID] === 'left' ? -300 : swipeDir[party.ID] === 'right' ? 300 : 0;
               const exitRotate = swipeDir[party.ID] === 'left' ? -15 : swipeDir[party.ID] === 'right' ? 15 : 0;
@@ -107,8 +149,13 @@ export function SwipePage() {
                     }
                   }}
                 >
-                  <div className="absolute inset-0 bg-gradient-to-tr from-brand-primary to-brand-secondary">
-                    <img src={displayImage} alt={party.Title} className="w-full h-full object-cover mix-blend-overlay opacity-80" referrerPolicy="no-referrer" />
+                  <div 
+                    className="absolute inset-0 bg-gradient-to-tr from-brand-primary to-brand-secondary cursor-pointer"
+                    onClick={() => {
+                        if (isTop) setSelectedParty(party);
+                    }}
+                  >
+                    <img src={displayImage || "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?q=80&w=1000"} alt={party.Title} className="w-full h-full object-cover mix-blend-overlay opacity-80" referrerPolicy="no-referrer" />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
                   </div>
 
@@ -123,8 +170,17 @@ export function SwipePage() {
                      </div>
                     <h2 className="text-[28px] font-extrabold text-white leading-tight mb-1 drop-shadow-md">{party.Title}</h2>
                     <p className="text-white/80 text-sm mb-4 flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-[#00FFA3] inline-block shadow-[0_0_8px_rgba(0,255,163,0.8)]" />
-                        Host • <span className="font-bold">{party.HostID?.slice(0, 6)}</span>
+                        <img 
+                          src={party.HostThumbnail ? getAssetUrl(party.HostThumbnail) : "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=200"} 
+                          className="w-6 h-6 rounded-full object-cover border-2 border-[#00FFA3] cursor-pointer shadow-[0_0_8px_rgba(0,255,163,0.6)]"
+                          alt="Host Thumbnail"
+                          onClick={(e) => {
+                             if (!isTop) return;
+                             e.stopPropagation();
+                             handleUserClick(party.HostID);
+                          }}
+                        />
+                        <span className="font-bold relative -top-0.5" style={{ textShadow: "0 1px 4px rgba(0,0,0,0.8)" }}>{party.HostName || party.HostID?.slice(0, 6)}</span>
                     </p>
                     
                     <div className="flex flex-wrap gap-2 mb-20">
@@ -161,6 +217,170 @@ export function SwipePage() {
           </AnimatePresence>
         )}
       </div>
+
+       {/* Party Detail Overlay */}
+       <AnimatePresence>
+          {selectedParty && (
+             <motion.div 
+               initial={{ y: '100%' }}
+               animate={{ y: 0 }}
+               exit={{ y: '100%' }}
+               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+               className="absolute inset-0 bg-[#0A0B14] z-[50] flex flex-col overflow-y-auto scrollbar-hide"
+             >
+                <div className="relative h-[400px] w-full overflow-hidden shrink-0">
+                   <img src={getAssetUrl(selectedParty.PartyPhotos?.[0] || selectedParty.Thumbnail || '') || "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?q=80&w=1000"} className="w-full h-full object-cover" />
+                   <div className="absolute inset-0 bg-gradient-to-t from-[#0A0B14] via-[#0A0B14]/40 to-transparent" />
+                   <button 
+                     onClick={() => setSelectedParty(null)}
+                     className="absolute top-6 left-6 w-10 h-10 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white/70 hover:text-white transition-colors border border-white/10"
+                   >
+                     <ChevronLeft size={20} />
+                   </button>
+                   <div className="absolute bottom-6 left-8 right-8">
+                      <h2 className="text-4xl font-black text-white tracking-widest uppercase mb-2 drop-shadow-lg leading-tight">
+                        {selectedParty.Title}
+                      </h2>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="w-2 h-2 rounded-full bg-[#00FFA3] inline-block shadow-[0_0_8px_rgba(0,255,163,0.8)]" />
+                        <p className="text-sm font-bold text-white uppercase tracking-widest drop-shadow-md">
+                           Host • {selectedParty.HostName || selectedParty.HostID?.slice(0, 6)}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                         {selectedParty.VibeTags?.map((tag: string) => (
+                            <span key={tag} className="px-2.5 py-1 bg-white/20 backdrop-blur-md rounded-lg text-[10px] font-bold text-white uppercase tracking-wide">
+                               {tag}
+                            </span>
+                         ))}
+                      </div>
+                   </div>
+                </div>
+
+                <div className="p-8 pb-32 space-y-8 flex-1">
+                   {selectedParty.Description && (
+                     <div>
+                        <h4 className="text-[10px] font-black text-white/20 tracking-[0.2em] uppercase mb-4">About</h4>
+                        <p className="text-sm font-medium text-white/70 leading-relaxed tracking-tight">{selectedParty.Description}</p>
+                     </div>
+                   )}
+                   
+                   <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5">
+                         <Calendar className="text-brand-accent mb-3" size={18} />
+                         <p className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-1">Date</p>
+                         <p className="text-xs font-bold text-white uppercase">
+                            {selectedParty.StartTime ? new Date(selectedParty.StartTime).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) : 'TBD'}
+                         </p>
+                      </div>
+                      <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5">
+                         <MapPin className="text-brand-accent mb-3" size={18} />
+                         <p className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-1">City</p>
+                         <p className="text-xs font-bold text-white uppercase">{selectedParty.City || 'LOCATION TBD'}</p>
+                      </div>
+                      <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5">
+                         <Users className="text-brand-accent mb-3" size={18} />
+                         <p className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-1">Capacity</p>
+                         <p className="text-xs font-bold text-white uppercase tracking-tight">
+                            {selectedParty.CurrentGuestCount || 0} / {selectedParty.MaxCapacity || 300} MAX
+                         </p>
+                      </div>
+                      <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5">
+                         <Clock className="text-brand-accent mb-3" size={18} />
+                         <p className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-1">Time</p>
+                         <p className="text-xs font-bold text-white uppercase">
+                            {selectedParty.StartTime ? new Date(selectedParty.StartTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'TBD'}
+                         </p>
+                      </div>
+                   </div>
+                   
+                   <div 
+                     onClick={() => handleUserClick(selectedParty.HostID)}
+                     className="bg-[#11131F] border border-white/5 rounded-3xl p-5 flex items-center gap-4 cursor-pointer hover:bg-white/5 transition-colors active:scale-95"
+                   >
+                       <img 
+                          src={selectedParty.HostThumbnail ? getAssetUrl(selectedParty.HostThumbnail) : "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=200"} 
+                          className="w-12 h-12 rounded-full object-cover border-2 border-[#00FFA3]"
+                       />
+                       <div>
+                          <p className="text-[9px] font-black text-white/40 uppercase tracking-widest block mb-1">Hosted By</p>
+                          <p className="text-sm font-bold text-white tracking-tight">{selectedParty.HostName || "Unknown"}</p>
+                       </div>
+                       <ChevronLeft size={16} className="text-white/20 ml-auto rotate-180" />
+                   </div>
+                </div>
+             </motion.div>
+          )}
+       </AnimatePresence>
+
+       {/* User Profile Overlay */}
+       <AnimatePresence>
+           {selectedUser && (
+             <motion.div 
+               initial={{ y: '100%' }}
+               animate={{ y: 0 }}
+               exit={{ y: '100%' }}
+               transition={{ type: 'spring', damping: 30, stiffness: 250 }}
+               className="absolute inset-0 bg-[#0A0B14] z-[60] flex flex-col overflow-y-auto scrollbar-hide"
+             >
+                <div className="relative h-96 w-full overflow-hidden shrink-0">
+                   <img src={getAssetUrl(selectedUser.ProfilePhotos?.[0] || selectedUser.Thumbnail || '') || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=1000"} className="w-full h-full object-cover" />
+                   <div className="absolute inset-0 bg-gradient-to-t from-[#0A0B14] via-[#0A0B14]/40 to-transparent" />
+                   <button 
+                     onClick={() => setSelectedUser(null)}
+                     className="absolute top-6 left-6 w-10 h-10 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white/70 hover:text-white transition-colors border border-white/10"
+                   >
+                     <ChevronLeft size={20} />
+                   </button>
+                   <div className="absolute bottom-6 left-8 right-8">
+                      <h2 className="text-4xl font-black text-white tracking-widest uppercase mb-1 drop-shadow-lg">
+                        {selectedUser.RealName}
+                      </h2>
+                      <div className="flex gap-4">
+                        {selectedUser.Gender && <p className="text-sm font-bold text-brand-accent uppercase tracking-widest drop-shadow-md">{selectedUser.Gender}</p>}
+                      </div>
+                   </div>
+                </div>
+
+                <div className="p-8 space-y-8 flex-1">
+                   {selectedUser.Bio && (
+                     <div>
+                        <h4 className="text-[10px] font-black text-white/20 tracking-[0.2em] uppercase mb-4">Bio</h4>
+                        <p className="text-sm font-medium text-white/70 leading-relaxed tracking-tight">{selectedUser.Bio}</p>
+                     </div>
+                   )}
+                   
+                   <div className="grid grid-cols-2 gap-4">
+                      {selectedUser.JobTitle && (
+                        <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5">
+                           <p className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-1">Work</p>
+                           <p className="text-xs font-bold text-white uppercase">{selectedUser.JobTitle}</p>
+                           {selectedUser.Company && <p className="text-[10px] text-brand-accent font-bold mt-1 uppercase">@ {selectedUser.Company}</p>}
+                        </div>
+                      )}
+                      {selectedUser.School && (
+                        <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5">
+                           <p className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-1">Education</p>
+                           <p className="text-xs font-bold text-white uppercase">{selectedUser.School}</p>
+                           {selectedUser.Degree && <p className="text-[10px] text-brand-accent font-bold mt-1 uppercase">{selectedUser.Degree}</p>}
+                        </div>
+                      )}
+                   </div>
+                </div>
+
+                <div className="p-6 pb-28 sticky bottom-0 bg-gradient-to-t from-[#0A0B14] via-[#0A0B14] to-transparent pt-10">
+                   <button 
+                     onClick={handleDM}
+                     className="w-full py-5 rounded-[24px] bg-white text-black text-[12px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-3 active:scale-95 transition-all hover:bg-white/90"
+                   >
+                      <Send size={16} />
+                      Send Message
+                   </button>
+                </div>
+             </motion.div>
+           )}
+       </AnimatePresence>
+
     </div>
   );
 }

@@ -21,6 +21,8 @@ export interface User {
 export interface Party {
   ID: string;
   HostID: string;
+  HostName?: string;
+  HostThumbnail?: string;
   Title: string;
   Description: string;
   PartyPhotos: string[];
