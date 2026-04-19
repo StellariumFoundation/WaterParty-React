@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Check, Waves, MapPin, Users, Calendar, Clock, ChevronLeft, Send, Info, Instagram, Twitter, ExternalLink } from 'lucide-react';
+import { X, Check, Waves, MapPin, Users, Calendar, Clock, ChevronLeft, ChevronRight, Send, Info, Instagram, Twitter, ExternalLink } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useStore } from '../lib/Store';
 import { getAssetUrl } from '../lib/constants';
@@ -169,7 +169,7 @@ export function SwipePage() {
                   }}
                 >
                   <div 
-                    className="absolute inset-0 bg-[#111] cursor-pointer"
+                    className="absolute inset-0 bg-[#111] cursor-pointer z-0"
                     onClick={() => {
                         if (isTop) {
                           setCurrentPartyPhotoIndex(0);
@@ -177,11 +177,19 @@ export function SwipePage() {
                         }
                     }}
                   >
-                    <img src={displayImage} alt={party.Title} className="w-full h-full object-cover opacity-90" referrerPolicy="no-referrer" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/10 to-transparent" />
+                    <img src={displayImage} alt={party.Title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-40" />
                   </div>
 
-                  <div className="absolute inset-x-0 bottom-0 p-8 pb-32 flex flex-col justify-end bg-gradient-to-t from-black via-black/80 to-transparent">
+                  <div 
+                    className="absolute inset-0 flex flex-col justify-end p-8 pb-32 bg-gradient-to-t from-black/60 via-transparent to-transparent cursor-pointer"
+                    onClick={() => {
+                        if (isTop) {
+                          setCurrentPartyPhotoIndex(0);
+                          setSelectedParty(party);
+                        }
+                    }}
+                  >
                      <div className="flex items-center space-x-2 mb-3 pointer-events-none">
                         <span className="px-2.5 py-1 bg-white/10 backdrop-blur-xl rounded-lg text-[9px] font-black text-brand-accent border border-white/5 flex items-center shadow-lg">
                            ⏳ {dateStr}
@@ -262,7 +270,7 @@ export function SwipePage() {
                transition={{ type: 'spring', damping: 25, stiffness: 200 }}
                className="absolute inset-0 bg-[#0A0B14] z-[50] flex flex-col overflow-y-auto scrollbar-hide"
              >
-                <div className="relative h-[400px] w-full overflow-hidden shrink-0" onClick={() => {
+                <div className="relative h-[65dvh] w-full overflow-hidden shrink-0" onClick={() => {
                     if (selectedParty?.PartyPhotos?.length > 1) {
                       setCurrentPartyPhotoIndex((prev) => (prev + 1) % selectedParty.PartyPhotos.length);
                     }
@@ -387,11 +395,14 @@ export function SwipePage() {
                 transition={{ type: 'spring', damping: 30, stiffness: 250 }}
                 className="absolute inset-0 bg-[#0A0B14] z-[60] flex flex-col overflow-y-auto scrollbar-hide"
               >
-                 <div className="relative h-96 w-full overflow-hidden shrink-0" onClick={() => {
-                    if (selectedUser?.ProfilePhotos?.length > 1) {
-                      setCurrentUserPhotoIndex((prev) => (prev + 1) % selectedUser.ProfilePhotos.length);
-                    }
-                 }}>
+                 <div 
+                    className="relative h-[550px] w-full overflow-hidden shrink-0 cursor-pointer" 
+                    onClick={(e) => {
+                       if (selectedUser?.ProfilePhotos?.length > 1) {
+                         setCurrentUserPhotoIndex((prev) => (prev + 1) % selectedUser.ProfilePhotos.length);
+                       }
+                    }}
+                 >
                     <AnimatePresence mode="wait">
                        <motion.img 
                          key={currentUserPhotoIndex}
@@ -406,26 +417,54 @@ export function SwipePage() {
                     
                     {/* Progress Bar Indicators at Top */}
                     {selectedUser?.ProfilePhotos?.length > 1 && (
-                       <div className="absolute top-4 left-4 right-4 flex gap-1.5 z-20">
-                          {selectedUser.ProfilePhotos.map((_: any, i: number) => (
-                             <div 
-                               key={i} 
-                               className={cn(
-                                 "h-1 flex-1 rounded-full transition-all duration-300", 
-                                 i === currentUserPhotoIndex ? "bg-brand-accent shadow-[0_0_8px_rgba(0,210,255,0.6)]" : "bg-white/20"
-                               )} 
-                             />
-                          ))}
-                       </div>
+                       <>
+                          <div className="absolute top-12 left-6 right-6 flex gap-1 z-20">
+                             {selectedUser.ProfilePhotos.map((_: any, i: number) => (
+                                <div 
+                                  key={i} 
+                                  className={cn(
+                                    "h-1 flex-1 rounded-full transition-all duration-300", 
+                                    i === currentUserPhotoIndex ? "bg-white shadow-[0_0_8px_rgba(255,255,255,0.6)]" : "bg-white/20"
+                                  )} 
+                                />
+                             ))}
+                          </div>
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCurrentUserPhotoIndex((prev) => (prev - 1 + selectedUser.ProfilePhotos.length) % selectedUser.ProfilePhotos.length);
+                            }}
+                            className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/20 backdrop-blur-md flex items-center justify-center text-white/50 hover:text-white hover:bg-black/40 transition-all z-20"
+                          >
+                            <ChevronLeft size={24} />
+                          </button>
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCurrentUserPhotoIndex((prev) => (prev + 1) % selectedUser.ProfilePhotos.length);
+                            }}
+                            className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/20 backdrop-blur-md flex items-center justify-center text-white/50 hover:text-white hover:bg-black/40 transition-all z-20"
+                          >
+                            <ChevronRight size={24} />
+                          </button>
+                       </>
                     )}
 
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#0A0B14] via-[#0A0B14]/40 to-transparent pointer-events-none" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#0A0B14] via-transparent to-transparent pointer-events-none" />
+                    
                     <button 
                       onClick={(e) => { e.stopPropagation(); setSelectedUser(null); }}
-                      className="absolute top-8 left-6 w-10 h-10 z-10 rounded-full bg-black/30 backdrop-blur-md flex items-center justify-center text-white/70 hover:text-white transition-colors border border-white/10"
+                      className="absolute top-8 left-6 w-10 h-10 z-30 rounded-full bg-black/30 backdrop-blur-md flex items-center justify-center text-white/70 hover:text-white transition-colors border border-white/10"
                     >
                       <ChevronLeft size={20} />
                     </button>
+
+                    <div className="absolute bottom-6 right-6 z-20">
+                        <div className="px-3 py-1.5 bg-black/80 backdrop-blur-md rounded-xl text-xs font-bold text-amber-400 flex items-center shadow-lg border border-white/5 uppercase">
+                           🛡️ {(selectedUser.TrustScore || 100).toFixed(1)} TRUST
+                        </div>
+                    </div>
+
                     <div className="absolute bottom-6 left-8 right-8 pointer-events-none">
                        <h2 className="text-4xl font-black text-white tracking-widest uppercase mb-1 drop-shadow-lg">
                          {selectedUser.RealName}
@@ -445,6 +484,25 @@ export function SwipePage() {
                     )}
                     
                     <div className="grid grid-cols-2 gap-4">
+                       <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5 col-span-2">
+                          <p className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-1">Impact</p>
+                          <div className="flex items-center justify-between">
+                             <div className="flex flex-col">
+                                <span className="text-xl font-black text-white uppercase tracking-tighter">12</span>
+                                <span className="text-[8px] font-bold text-white/40 uppercase tracking-widest">Parties Hosted</span>
+                             </div>
+                             <div className="w-px h-8 bg-white/10" />
+                             <div className="flex flex-col">
+                                <span className="text-xl font-black text-brand-accent uppercase tracking-tighter">98%</span>
+                                <span className="text-[8px] font-bold text-white/40 uppercase tracking-widest">Vibe Rating</span>
+                             </div>
+                             <div className="w-px h-8 bg-white/10" />
+                             <div className="flex flex-col">
+                                <span className="text-xl font-black text-white uppercase tracking-tighter">4.2K</span>
+                                <span className="text-[8px] font-bold text-white/40 uppercase tracking-widest">Guest Reach</span>
+                             </div>
+                          </div>
+                       </div>
                        {selectedUser.JobTitle && (
                          <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5">
                             <p className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-1">Work</p>
@@ -459,7 +517,13 @@ export function SwipePage() {
                             {selectedUser.Degree && <p className="text-[10px] text-brand-accent font-bold mt-1 uppercase">{selectedUser.Degree}</p>}
                          </div>
                        )}
-                       <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5 col-span-2">
+                        {selectedUser.HeightCm > 0 && (
+                          <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5">
+                             <p className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-1">Height</p>
+                             <p className="text-xs font-bold text-white uppercase">{selectedUser.HeightCm} CM</p>
+                          </div>
+                        )}
+                        <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5 col-span-2">
                           <p className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-1">Vibe Status</p>
                           <div className="flex items-center gap-2">
                              <div className="h-1.5 flex-1 bg-white/5 rounded-full overflow-hidden">
