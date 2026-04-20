@@ -51,23 +51,6 @@ ensureColumn('users', 'HostingRating', 'REAL DEFAULT 0');
 ensureColumn('users', 'Reach', 'INTEGER DEFAULT 0');
 
 db.exec(`
-  -- Seed high-fidelity demo data for hosts if they exist (based on names in screenshot)
-  UPDATE users SET 
-    Gender = 'Male',
-    HeightCm = 185,
-    JobTitle = 'Experience Designer',
-    Company = 'Club Stellar',
-    School = 'School of Social Arts',
-    Degree = 'Master of Vibes',
-    Instagram = 'stellar_foundation',
-    Twitter = 'stellar_x',
-    Bio = 'Curating the most exclusive rooftop and underground experiences in the city. Join the foundation for a night you won''t forget.',
-    ProfilePhotos = '["https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=400", "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=400", "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?q=80&w=400"]',
-    HostedCount = 24,
-    HostingRating = 99.2,
-    Reach = 15400
-  WHERE RealName LIKE '%Stellar%';
-
   CREATE TABLE IF NOT EXISTS parties (
     ID TEXT PRIMARY KEY,
     HostID TEXT,
