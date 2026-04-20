@@ -149,10 +149,15 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  // CORS & Request logging
   app.use(express.json());
-
-  // Request logging
   app.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+    res.header("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(200);
+    }
     console.log(`${req.method} ${req.url}`);
     next();
   });
@@ -164,15 +169,7 @@ async function startServer() {
     'INSERT INTO users (ID, RealName, Email, Password, ProfilePhotos, TrustScore, Thumbnail, Bio, Instagram, Twitter, Gender, HeightCm, JobTitle, Company, School, Degree, HostedCount, HostingRating, Reach) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
   );
 
-  app.get('/api/users/:id', (req, res) => {
-    const userRow = getUserByIdStmt.get(req.params.id) as any;
-    if (!userRow) return res.status(404).json({ error: "User not found" });
-    const safeUser = { ...userRow };
-    delete safeUser.Password;
-    res.json(mapUser(safeUser));
-  });
-
-  app.post('/login', (req, res) => {
+  app.post(['/login', '/login/'], (req, res) => {
     const { email, password } = req.body;
     let userRow = getUserStmt.get(email) as any;
     
@@ -184,7 +181,7 @@ async function startServer() {
     res.json(mapUser(safeUser));
   });
 
-  app.post('/register', (req, res) => {
+  app.post(['/register', '/register/'], (req, res) => {
     const { user, password } = req.body;
     
     if (!password || password.length < 8) {
@@ -208,10 +205,12 @@ async function startServer() {
     res.json(mapUser(safeUser));
   });
 
-  app.all('/register', (req, res) => {
-    if (req.method !== 'POST') {
-      res.status(405).json({ error: "Only POST allowed" });
-    }
+  app.get(['/api/users/:id', '/api/users/:id/'], (req, res) => {
+    const userRow = getUserByIdStmt.get(req.params.id) as any;
+    if (!userRow) return res.status(404).json({ error: "User not found" });
+    const safeUser = { ...userRow };
+    delete safeUser.Password;
+    res.json(mapUser(safeUser));
   });
 
   // Vite middleware for development
