@@ -213,7 +213,7 @@ async function startServer() {
     res.json(mapUser(safeUser));
   });
 
-  // Vite middleware for development
+  // Vite middleware for development (Keep this, but we'll isolate it)
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -221,12 +221,15 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
+    // Only serve static files if explicitly requested, or remove this to make it API-only
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
   }
+
+  // Final catch-all for unknown API routes - return JSON 404, not HTML
+  app.use((req, res) => {
+    res.status(404).json({ error: "API endpoint not found" });
+  });
 
   const server = http.createServer(app);
   
