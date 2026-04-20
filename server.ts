@@ -221,14 +221,13 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    // Only serve static files if explicitly requested, or remove this to make it API-only
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
+    // API-only mode: No static file serving
   }
 
   // Final catch-all for unknown API routes - return JSON 404, not HTML
   app.use((req, res) => {
-    res.status(404).json({ error: "API endpoint not found" });
+    console.log(`DEBUG: Unmatched route hit: ${req.method} ${req.url}`);
+    res.status(404).json({ error: "API endpoint not found", path: req.url });
   });
 
   const server = http.createServer(app);
