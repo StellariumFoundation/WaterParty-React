@@ -117,8 +117,9 @@ jobs:
 
       - name: Build iOS App (Simulator Debug)
         run: |
-          cd ios
-          xcodebuild -workspace "App/App.xcworkspace" -scheme "App" -configuration Debug -sdk iphonesimulator build -derivedDataPath build
+          ls -R ios
+          cd ios/App
+          xcodebuild -workspace "App.xcworkspace" -scheme "App" -configuration Debug -sdk iphonesimulator build -derivedDataPath build
 
       - name: Upload iOS App Artifact
         uses: actions/upload-artifact@v4
