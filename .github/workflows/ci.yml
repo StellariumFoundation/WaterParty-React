@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ main, master ]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   # -- WEB STATIC BUILD --
   web-build:
@@ -112,14 +115,9 @@ jobs:
           npx cap sync ios
           npx cap update ios
 
-      - name: Install CocoaPods
-        run: |
-          cd ios
-          pod install
-
       - name: Build iOS App (Simulator Debug)
         run: |
-          cd ios/App
+          cd ios
           xcodebuild -workspace "App.xcworkspace" -scheme "App" -configuration Debug -sdk iphonesimulator build -derivedDataPath build
 
       - name: Upload iOS App Artifact
