@@ -79,9 +79,9 @@ jobs:
           cd ios/App
           xcodebuild -project "App.xcodeproj" -scheme "App" -configuration Debug -sdk iphonesimulator build -derivedDataPath build
           # Zip the app bundle to make it portable and easier to handle as a single file
-          zip -r WaterParty.iOS.zip build/Build/Products/Debug-iphonesimulator/App.app
+          zip -r WaterParty.Ios.zip build/Build/Products/Debug-iphonesimulator/App.app
       - uses: actions/upload-artifact@v4
-        with: { name: ios-simulator-app, path: WaterParty.iOS.zip, retention-days: 7 }
+        with: { name: ios-simulator-app, path: WaterParty.Ios.zip, retention-days: 7 }
 
   release:
     name: Create GitHub Release
@@ -99,7 +99,7 @@ jobs:
           name: "Continuous Build ${{ github.sha }}"
           files: |
             artifacts/android-apk/WaterParty.Android.apk
-            artifacts/ios-simulator-app/WaterParty.iOS.zip
+            artifacts/ios-simulator-app/WaterParty.Ios.zip
             artifacts/web-zip/WaterParty.Web.zip
           body: |
             # 🌊 WaterParty - The Ultimate Party Experience

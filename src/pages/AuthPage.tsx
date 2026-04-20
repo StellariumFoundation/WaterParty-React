@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useStore } from '../lib/Store';
 import { API_BASE } from '../lib/constants';
 import { Waves, Mail, Lock } from 'lucide-react';
+import { Geolocation } from '@capacitor/geolocation';
 
 export function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
@@ -59,16 +60,15 @@ export function AuthPage() {
       
       if (!res.ok) throw new Error(data?.error || data?.message || 'Request failed');
       
-      // Request location before finalizing login so SwipePage has it immediately
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          login(data);
-        },
-        (error) => {
-          console.warn("Location permission denied during auth, proceeding with default location.");
-          login(data);
-        }
-      );
+      // Request location using Capacitor plugin before finalizing login
+      try {
+        await Geolocation.requestPermissions();
+        await Geolocation.getCurrentPosition();
+      } catch (e) {
+        console.warn("Location permission denied or unavailable, proceeding with default location.");
+      }
+      login(data);
+
     } catch (err: any) {
       setError(err.message);
     } finally {
