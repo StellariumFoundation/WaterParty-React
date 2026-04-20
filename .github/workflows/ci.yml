@@ -3,9 +3,6 @@ name: Mobile CI Build (Capacitor)
 on:
   push:
     branches: [ main, master ]
-    tags: [ 'v*' ]
-  pull_request:
-    branches: [ main, master ]
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -18,25 +15,13 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-
-      - name: Install Dependencies
-        run: npm ci
-
-      - name: Build Web (Vite)
-        run: npm run build
-
-      - name: Upload Web Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: web-dist
-          path: dist/
-          retention-days: 7
+        with: { node-version: '22', cache: 'npm' }
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with: { name: web-dist, path: dist/, retention-days: 7 }
 
   # -- ANDROID CAPACITOR BUILD --
   android-build:
@@ -46,45 +31,25 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-
+        with: { node-version: '22', cache: 'npm' }
       - name: Setup Java
         uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '21'
-
-      - name: Install Dependencies
-        run: npm ci
-
-      - name: Download Web Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: web-dist
-          path: dist/
-
-      - name: Sync Capacitor Android
-        run: |
+        with: { distribution: 'zulu', java-version: '21' }
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with: { name: web-dist, path: dist/ }
+      - run: |
           npx cap add android || true
           npx cap sync android
-
       - name: Build Android APK (Debug)
         run: |
           cd android
           chmod +x ./gradlew
           ./gradlew assembleDebug
-
-      - name: Upload Android Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-apk
-          path: android/app/build/outputs/apk/debug/*.apk
-          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        with: { name: android-apk, path: android/app/build/outputs/apk/debug/*.apk, retention-days: 7 }
 
   # -- IOS CAPACITOR BUILD --
   ios-build:
@@ -94,61 +59,44 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-
-      - name: Install Dependencies
-        run: npm ci
-
-      - name: Download Web Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: web-dist
-          path: dist/
-          
-      - name: Sync Capacitor iOS
-        run: |
+        with: { node-version: '22', cache: 'npm' }
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with: { name: web-dist, path: dist/ }
+      - run: |
           npx cap add ios || true
           npx cap sync ios
           npx cap update ios
-
       - name: Build iOS App (Simulator Debug)
         run: |
           cd ios/App
           xcodebuild -project "App.xcodeproj" -scheme "App" -configuration Debug -sdk iphonesimulator build -derivedDataPath build
-
-      - name: Upload iOS App Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-simulator-app
-          path: ios/App/build/Build/Products/Debug-iphonesimulator/*.app
-          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        with: { name: ios-simulator-app, path: ios/App/build/Build/Products/Debug-iphonesimulator/*.app, retention-days: 7 }
 
   release:
     name: Create GitHub Release
-    if: startsWith(github.ref, 'refs/tags/')
     needs: [android-build, ios-build]
     runs-on: ubuntu-latest
     steps:
       - name: Download Artifacts
         uses: actions/download-artifact@v4
-        with:
-          path: artifacts/
+        with: { path: artifacts/ }
       
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: "continuous-build-${{ github.sha }}"
+          name: "Continuous Build ${{ github.sha }}"
           files: |
             artifacts/android-apk/*.apk
             artifacts/ios-simulator-app/*.app
           body: |
-            ## Release ${{ github.ref_name }}
+            ## Automated Build
             
-            This release contains the latest debug builds for Android (APK) and iOS Simulator (.app folder).
+            This release contains the latest debug builds for Android (APK) and iOS Simulator (.app folder) from commit ${{ github.sha }}.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
