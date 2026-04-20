@@ -1,6 +1,6 @@
 export const HOST = window.location.host;
 
-const PRODUCTION_URL = 'https://ais-dev-lr54twg5655e4thhbtygne-661033979019.us-east1.run.app';
+const PRODUCTION_URL = 'https://waterparty-react.onrender.com';
 
 export const API_BASE = window.location.protocol === 'file:' 
   ? PRODUCTION_URL 

@@ -151,6 +151,12 @@ async function startServer() {
 
   app.use(express.json());
 
+  // Request logging
+  app.use((req, res, next) => {
+    console.log(`${req.method} ${req.url}`);
+    next();
+  });
+
   // API Endpoints
   const getUserStmt = db.prepare('SELECT * FROM users WHERE Email = ?');
   const getUserByIdStmt = db.prepare('SELECT * FROM users WHERE ID = ?');
@@ -200,6 +206,12 @@ async function startServer() {
     const safeUser = { ...userRow } as any;
     delete safeUser.Password;
     res.json(mapUser(safeUser));
+  });
+
+  app.all('/register', (req, res) => {
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: "Only POST allowed" });
+    }
   });
 
   // Vite middleware for development
