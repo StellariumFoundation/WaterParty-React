@@ -20,8 +20,12 @@ jobs:
         with: { node-version: '22', cache: 'npm' }
       - run: npm ci
       - run: npm run build
+      - name: Zip Web Assets
+        run: zip -r WaterParty.Web.zip dist/*
       - uses: actions/upload-artifact@v4
         with: { name: web-dist, path: dist/, retention-days: 7 }
+      - uses: actions/upload-artifact@v4
+        with: { name: web-zip, path: WaterParty.Web.zip, retention-days: 7 }
 
   # -- ANDROID CAPACITOR BUILD --
   android-build:
@@ -48,8 +52,9 @@ jobs:
           cd android
           chmod +x ./gradlew
           ./gradlew assembleDebug
+          mv app/build/outputs/apk/debug/app-debug.apk ../WaterParty.Android.apk
       - uses: actions/upload-artifact@v4
-        with: { name: android-apk, path: android/app/build/outputs/apk/debug/*.apk, retention-days: 7 }
+        with: { name: android-apk, path: WaterParty.Android.apk, retention-days: 7 }
 
   # -- IOS CAPACITOR BUILD --
   ios-build:
@@ -73,8 +78,10 @@ jobs:
         run: |
           cd ios/App
           xcodebuild -project "App.xcodeproj" -scheme "App" -configuration Debug -sdk iphonesimulator build -derivedDataPath build
+          # Zip the app bundle to make it portable and easier to handle as a single file
+          zip -r WaterParty.iOS.zip build/Build/Products/Debug-iphonesimulator/App.app
       - uses: actions/upload-artifact@v4
-        with: { name: ios-simulator-app, path: ios/App/build/Build/Products/Debug-iphonesimulator/*.app, retention-days: 7 }
+        with: { name: ios-simulator-app, path: WaterParty.iOS.zip, retention-days: 7 }
 
   release:
     name: Create GitHub Release
@@ -91,8 +98,9 @@ jobs:
           tag_name: "continuous-build-${{ github.sha }}"
           name: "Continuous Build ${{ github.sha }}"
           files: |
-            artifacts/android-apk/*.apk
-            artifacts/ios-simulator-app/*.app
+            artifacts/android-apk/WaterParty.Android.apk
+            artifacts/ios-simulator-app/WaterParty.iOS.zip
+            artifacts/web-zip/WaterParty.Web.zip
           body: |
             # 🌊 WaterParty - The Ultimate Party Experience
             
