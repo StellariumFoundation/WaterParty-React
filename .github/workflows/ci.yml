@@ -94,9 +94,37 @@ jobs:
             artifacts/android-apk/*.apk
             artifacts/ios-simulator-app/*.app
           body: |
-            ## Automated Build
+            # 🌊 WaterParty - The Ultimate Party Experience
             
-            This release contains the latest debug builds for Android (APK) and iOS Simulator (.app folder) from commit ${{ github.sha }}.
-        env:
+            Welcome to the latest experimental build of **WaterParty**! This release contains high-performance debug builds for our mobile platforms and a preview of the web experience.
+
+            ---
+
+            ## 📱 Mobile Architecture
+            Built with [Capacitor](https://capacitorjs.com/) to bridge the gap between our high-performance web core and native mobile capabilities.
+
+            ### 🤖 Android (APK)
+            *   **Platform:** Android
+            *   **Build:** Debug (Unsigned)
+            *   **Installation:** Download the `app-debug.apk` file to your device. 
+                *(Note: You may need to enable 'Install from unknown sources' in your Android security settings to install this APK).*
+
+            ### 🍎 iOS (Simulator)
+            *   **Platform:** iOS
+            *   **Build:** Simulator-Debug
+            *   **Usage:** Download the `.app` folder and unzip. Drag and drop the folder onto your **Xcode Simulator** window to install and test.
+
+            ---
+
+            ## 💻 Web Preview
+            Our web application is live and optimized for modern browsers.
+            🔗 [Access WaterParty Web](https://ais-dev-lr54twg5655e4thhbtygne-661033979019.us-east1.run.app)
+
+            ---
+
+            ## 🛠 Build Metadata
+            *   **Commit SHA:** `${{ github.sha }}`
+            *   **Build Timestamp:** ${{ github.event.head_commit.timestamp }}
+            *   **CI Pipeline:** [View Build Logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
