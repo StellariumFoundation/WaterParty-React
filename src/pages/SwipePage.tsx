@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, Check, Waves, MapPin, Users, Calendar, Clock, ChevronLeft, ChevronRight, Send, Info, Instagram, Twitter, ExternalLink } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useStore } from '../lib/Store';
-import { getAssetUrl } from '../lib/constants';
+import { getAssetUrl, API_BASE } from '../lib/constants';
 
 const USER_PLACEHOLDER = "https://images.unsplash.com/photo-1511367461989-f85a21fda167?q=80&w=400";
 const PARTY_PLACEHOLDER = "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?q=80&w=1000";
@@ -32,7 +32,7 @@ export function SwipePage() {
   const handleUserClick = async (userId: string) => {
     if (userId === user?.ID) return;
     try {
-      const res = await fetch(`/api/users/${userId}`);
+      const res = await fetch(`${API_BASE}/api/users/${userId}`);
       if (res.ok) {
         const data = await res.json();
         setCurrentUserPhotoIndex(0);

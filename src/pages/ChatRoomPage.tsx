@@ -4,7 +4,7 @@ import { Send, ChevronLeft, Info, Calendar, MapPin, Users, Clock, Trash2, X } fr
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { useStore } from '../lib/Store';
-import { getAssetUrl } from '../lib/constants';
+import { getAssetUrl, API_BASE } from '../lib/constants';
 
 // Since we don't have a real chat message event on server yet, 
 // we'll mock the active chat experience but allow sending
@@ -29,7 +29,7 @@ export function ChatRoomPage() {
     if (chat && !chat.IsGroup && user) {
       const otherId = chat.ParticipantIDs?.find(id => id !== user.ID);
       if (otherId) {
-        fetch(`/api/users/${otherId}`)
+        fetch(`${API_BASE}/api/users/${otherId}`)
           .then(res => res.json())
           .then(data => setOtherUser(data))
           .catch(err => console.error("Other user fetch failed", err));
@@ -77,7 +77,7 @@ export function ChatRoomPage() {
   const handleUserClick = async (userId: string) => {
     if (userId === user?.ID) return;
     try {
-      const res = await fetch(`/api/users/${userId}`);
+      const res = await fetch(`${API_BASE}/api/users/${userId}`);
       if (res.ok) {
         const data = await res.json();
         setSelectedUser(data);
