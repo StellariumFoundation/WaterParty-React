@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode, useRe
 import { useNavigate } from 'react-router-dom';
 import { User, Party, ChatRoom } from './types';
 import { WS_BASE } from './constants';
+import { Geolocation } from '@capacitor/geolocation';
 
 interface StoreContextType {
   user: User | null;
@@ -32,15 +33,27 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
     navigate.current = navTrigger;
   }, [navTrigger]);
 
-  const refreshLocation = (onSuccess?: (coords: { lat: number; lon: number }) => void) => {
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition((pos) => {
+  const refreshLocation = async (onSuccess?: (coords: { lat: number; lon: number }) => void) => {
+    try {
+      if (window.location.protocol !== 'file:' && !(window as any).Capacitor) {
+        if ('geolocation' in navigator) {
+          navigator.geolocation.getCurrentPosition((pos) => {
+            const newCoords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+            setCoords(newCoords);
+            if (onSuccess) onSuccess(newCoords);
+          }, (error) => {
+            console.error("Browser location error:", error);
+          });
+        }
+      } else {
+        await Geolocation.requestPermissions();
+        const pos = await Geolocation.getCurrentPosition();
         const newCoords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
         setCoords(newCoords);
         if (onSuccess) onSuccess(newCoords);
-      }, (error) => {
-        console.error("Location error:", error);
-      });
+      }
+    } catch (e) {
+      console.warn("Location permission denied or unavailable:", e);
     }
   };
 

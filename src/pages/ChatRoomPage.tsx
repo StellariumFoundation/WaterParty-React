@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Send, ChevronLeft, Info, Calendar, MapPin, Users, Clock, Trash2, X } from 'lucide-react';
+import { Send, ChevronLeft, Info, Calendar, MapPin, Users, Clock, Trash2, X, Instagram, Twitter, ExternalLink, User as UserIcon, Briefcase, GraduationCap } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { useStore } from '../lib/Store';
@@ -18,6 +18,7 @@ export function ChatRoomPage() {
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
   const [otherUser, setOtherUser] = useState<any | null>(null);
+  const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   
   const chat = chats.find(c => c.ID === chatId);
   const associatedParty = feed.find(p => p.ID === chat?.PartyID);
@@ -235,16 +236,43 @@ export function ChatRoomPage() {
              >
                 {chat.IsGroup ? (
                    <>
-                    {associatedParty?.PartyPhotos?.[0] && (
-                       <div className="relative h-64 w-full overflow-hidden shrink-0">
-                          <img src={getAssetUrl(associatedParty.PartyPhotos[0])} className="w-full h-full object-cover" />
-                          <div className="absolute inset-0 bg-gradient-to-t from-[#0A0B14] via-transparent to-transparent" />
+                    {associatedParty?.PartyPhotos && associatedParty.PartyPhotos.length > 0 && (
+                       <div className="relative h-72 w-full shrink-0 group">
+                          <div 
+                            className="w-full h-full flex overflow-x-auto snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                            onScroll={(e) => {
+                              const idx = Math.round(e.currentTarget.scrollLeft / e.currentTarget.offsetWidth);
+                              setCurrentPhotoIndex(idx);
+                            }}
+                          >
+                             {associatedParty.PartyPhotos.map((photo: string, idx: number) => (
+                                <div key={idx} className="w-full h-full flex-none snap-center relative">
+                                   <img src={getAssetUrl(photo)} className="w-full h-full object-cover" />
+                                   <div className="absolute inset-0 bg-gradient-to-t from-[#0A0B14] via-transparent to-transparent pointer-events-none" />
+                                </div>
+                             ))}
+                          </div>
+
                           <button 
-                            onClick={() => setShowInfo(false)}
-                            className="absolute top-6 right-6 w-10 h-10 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white/70 hover:text-white transition-colors border border-white/10"
+                            onClick={() => { setShowInfo(false); setCurrentPhotoIndex(0); }}
+                            className="absolute top-6 right-6 w-10 h-10 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white/70 hover:text-white transition-colors border border-white/10 z-10"
                           >
                             <X size={20} />
                           </button>
+
+                          {associatedParty.PartyPhotos.length > 1 && (
+                            <div className="absolute bottom-6 left-0 right-0 flex justify-center gap-1.5 z-10">
+                              {associatedParty.PartyPhotos.map((_: any, idx: number) => (
+                                 <div 
+                                   key={idx}
+                                   className={cn(
+                                     "h-1.5 rounded-full transition-all duration-300",
+                                     currentPhotoIndex === idx ? "w-4 bg-brand-accent shadow-[0_0_8px_rgba(33,212,253,0.5)]" : "w-1.5 bg-white/30"
+                                   )}
+                                 />
+                              ))}
+                            </div>
+                          )}
                        </div>
                     )}
 
@@ -298,17 +326,6 @@ export function ChatRoomPage() {
                           </p>
                        </div>
 
-                       {associatedParty?.PartyPhotos && associatedParty.PartyPhotos.length > 1 && (
-                          <div>
-                             <h4 className="text-[10px] font-black text-white/20 tracking-[0.2em] uppercase mb-4">GALLERY</h4>
-                             <div className="grid grid-cols-2 gap-3">
-                                {associatedParty.PartyPhotos.slice(1).map((photo: string, i: number) => (
-                                   <img key={i} src={getAssetUrl(photo)} className="w-full aspect-square rounded-2xl object-cover border border-white/5" />
-                                ))}
-                             </div>
-                          </div>
-                       )}
-
                        {isHost && associatedParty && (
                           <div className="pt-8 border-t border-white/5 mt-6">
                              {!isConfirmingDelete ? (
@@ -346,61 +363,181 @@ export function ChatRoomPage() {
                    <div className="flex flex-col flex-1">
                       {otherUser ? (
                         <>
-                          <div className="relative h-96 w-full overflow-hidden shrink-0">
-                             <img src={getAssetUrl(otherUser.ProfilePhotos?.[0] || otherUser.Thumbnail || '') || "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=800"} className="w-full h-full object-cover" />
-                             <div className="absolute inset-0 bg-gradient-to-t from-[#0A0B14] via-transparent to-transparent" />
-                             <button 
-                               onClick={() => setShowInfo(false)}
-                               className="absolute top-6 right-6 w-10 h-10 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white/70 hover:text-white transition-colors border border-white/10"
+                          <div className="relative h-96 w-full shrink-0 group">
+                             <div 
+                               className="w-full h-full flex overflow-x-auto snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                               onScroll={(e) => {
+                                 const idx = Math.round(e.currentTarget.scrollLeft / e.currentTarget.offsetWidth);
+                                 setCurrentPhotoIndex(idx);
+                               }}
                              >
-                               <X size={20} />
+                                {(otherUser.ProfilePhotos?.length > 0 ? otherUser.ProfilePhotos : [otherUser.Thumbnail || ""]).filter(Boolean).map((photo: string, idx: number) => (
+                                   <div key={idx} className="w-full h-full flex-none snap-center relative">
+                                      <img src={getAssetUrl(photo) || "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=800"} className="w-full h-full object-cover" />
+                                      <div className="absolute inset-0 bg-gradient-to-t from-[#0A0B14] via-[#0A0B14]/40 to-transparent pointer-events-none" />
+                                   </div>
+                                ))}
+                             </div>
+
+                             <button 
+                               onClick={() => { setShowInfo(false); setCurrentPhotoIndex(0); }}
+                               className="absolute top-6 right-6 w-10 h-10 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white/70 hover:text-white transition-colors border border-white/10 z-10"
+                             >
+                                <X size={20} />
                              </button>
-                             <div className="absolute bottom-6 left-8 right-8">
+
+                             <div className="absolute bottom-6 right-6 z-20">
+                                 <div className="px-3 py-1.5 bg-black/80 backdrop-blur-md rounded-xl text-xs font-bold text-amber-400 flex items-center shadow-lg border border-white/5 uppercase">
+                                    🛡️ {(otherUser.TrustScore || 100).toFixed(1)} TRUST
+                                 </div>
+                             </div>
+
+                             <div className="absolute bottom-6 left-8 right-8 pointer-events-none z-10">
                                 <h2 className="text-4xl font-black text-white tracking-widest uppercase mb-1 drop-shadow-lg">
                                   {otherUser.RealName}
                                 </h2>
                                 <div className="flex gap-4">
                                   {otherUser.Gender && <p className="text-sm font-bold text-brand-accent uppercase tracking-widest drop-shadow-md">{otherUser.Gender}</p>}
-                                  {otherUser.HeightCm > 0 && <p className="text-sm font-bold text-white/50 uppercase tracking-widest drop-shadow-md">{otherUser.HeightCm}CM</p>}
                                 </div>
                              </div>
-                          </div>
 
-                          <div className="p-8 space-y-8 flex-1">
-                             {otherUser.Bio && (
-                               <div>
-                                  <h4 className="text-[10px] font-black text-white/20 tracking-[0.2em] uppercase mb-4">Bio</h4>
-                                  <p className="text-sm font-medium text-white/70 leading-relaxed tracking-tight">{otherUser.Bio}</p>
+                             {otherUser.ProfilePhotos?.length > 1 && (
+                               <div className="absolute top-6 left-0 right-0 flex justify-center gap-1.5 z-10 pointer-events-none">
+                                 {otherUser.ProfilePhotos.map((_: any, idx: number) => (
+                                    <div 
+                                      key={idx}
+                                      className={cn(
+                                        "h-1.5 rounded-full transition-all duration-300",
+                                        currentPhotoIndex === idx ? "w-4 bg-brand-accent shadow-[0_0_8px_rgba(33,212,253,0.5)]" : "w-1.5 bg-white/30"
+                                      )}
+                                    />
+                                 ))}
                                </div>
                              )}
-                             
-                             <div className="grid grid-cols-2 gap-4">
-                                {otherUser.JobTitle && (
-                                  <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5">
-                                     <p className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-1">Work</p>
-                                     <p className="text-xs font-bold text-white uppercase">{otherUser.JobTitle}</p>
-                                     {otherUser.Company && <p className="text-[10px] text-brand-accent font-bold mt-1 uppercase">@ {otherUser.Company}</p>}
-                                  </div>
-                                )}
-                                {otherUser.School && (
-                                  <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5">
-                                     <p className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-1">Education</p>
-                                     <p className="text-xs font-bold text-white uppercase">{otherUser.School}</p>
-                                     {otherUser.Degree && <p className="text-[10px] text-brand-accent font-bold mt-1 uppercase">{otherUser.Degree}</p>}
-                                  </div>
-                                )}
+                          </div>
+
+                          <div className="px-6 -mt-4 relative z-10 space-y-8 pb-32 pt-10">
+                             {/* Name & Bio */}
+                             <div>
+                                <h1 className="text-4xl font-bold text-white mb-6 tracking-tight">{otherUser.RealName}</h1>
+                                <h3 className="text-[10px] font-bold text-white/40 tracking-wider mb-2 uppercase">About Me</h3>
+                                <p className="text-sm text-white/80 leading-relaxed">
+                                  {otherUser.Bio || "No bio added yet."}
+                                </p>
                              </div>
 
-                             {otherUser.ProfilePhotos && otherUser.ProfilePhotos.length > 1 && (
-                                <div>
-                                   <h4 className="text-[10px] font-black text-white/20 tracking-[0.2em] uppercase mb-4">GALLERY</h4>
-                                   <div className="grid grid-cols-2 gap-3 pb-10">
-                                      {otherUser.ProfilePhotos.slice(1).map((photo: string, i: number) => (
-                                         <img key={i} src={getAssetUrl(photo)} className="w-full aspect-square rounded-2xl object-cover border border-white/5" />
-                                      ))}
+                             {/* Vibe Impact */}
+                             <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5">
+                                <p className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-4">Vibe Impact</p>
+                                <div className="flex items-center justify-between">
+                                   <div className="flex flex-col">
+                                      <span className="text-xl font-black text-white uppercase tracking-tighter">
+                                         {otherUser.HostedCount || 0}
+                                      </span>
+                                      <span className="text-[8px] font-bold text-white/40 uppercase tracking-widest mt-1">Hosted</span>
+                                   </div>
+                                   <div className="w-px h-8 bg-white/10 mx-2" />
+                                   <div className="flex flex-col">
+                                      <span className="text-xl font-black text-brand-accent uppercase tracking-tighter">
+                                         {otherUser.HostingRating ? `${otherUser.HostingRating}%` : "0%"}
+                                      </span>
+                                      <span className="text-[8px] font-bold text-white/40 uppercase tracking-widest mt-1">Rating</span>
+                                   </div>
+                                   <div className="w-px h-8 bg-white/10 mx-2" />
+                                   <div className="flex flex-col">
+                                      <span className="text-xl font-black text-white uppercase tracking-tighter">
+                                         {otherUser.Reach ? (otherUser.Reach >= 1000 ? `${(otherUser.Reach / 1000).toFixed(1)}K` : otherUser.Reach) : "0"}
+                                      </span>
+                                      <span className="text-[8px] font-bold text-white/40 uppercase tracking-widest mt-1">Reach</span>
                                    </div>
                                 </div>
+                             </div>
+
+                             {/* Lifestyle */}
+                             {(otherUser.Gender || otherUser.HeightCm > 0) && (
+                               <section>
+                                  <h3 className="text-[10px] font-bold text-white/40 tracking-wider mb-3 uppercase">Lifestyle</h3>
+                                  <div className="space-y-3">
+                                     {otherUser.Gender && (
+                                       <div className="bg-[#11131F] border border-white/5 rounded-2xl p-4 flex items-center justify-between">
+                                          <div className="flex flex-col">
+                                             <span className="text-[10px] text-white/40 mb-1">Gender</span>
+                                             <span className="text-sm text-white font-medium uppercase">{otherUser.Gender}</span>
+                                          </div>
+                                          <UserIcon size={16} className="text-white/20" />
+                                       </div>
+                                     )}
+
+                                     {otherUser.HeightCm > 0 && (
+                                       <div className="grid grid-cols-2 gap-3">
+                                           <div className="bg-[#11131F] border border-white/5 rounded-2xl p-4 flex flex-col justify-center">
+                                             <span className="text-sm text-white font-medium flex items-center gap-2"><span className="text-white/20">📏</span> {otherUser.HeightCm} cm</span>
+                                          </div>
+                                       </div>
+                                     )}
+                                  </div>
+                               </section>
                              )}
+
+                             {/* Work & Ed */}
+                             {(otherUser.JobTitle || otherUser.School) && (
+                               <section>
+                                  <h3 className="text-[10px] font-bold text-white/40 tracking-wider mb-3 uppercase">Work & Education</h3>
+                                  <div className="space-y-3">
+                                     {otherUser.JobTitle && (
+                                       <div className="bg-[#11131F] border border-white/5 rounded-2xl p-4 flex items-center gap-4">
+                                          <Briefcase size={18} className="text-white/20 shrink-0" />
+                                          <span className="text-sm text-white font-medium">{otherUser.JobTitle} {otherUser.Company && `at ${otherUser.Company}`}</span>
+                                       </div>
+                                     )}
+                                     {otherUser.School && (
+                                       <div className="bg-[#11131F] border border-white/5 rounded-2xl p-4 flex items-center gap-4">
+                                          <GraduationCap size={18} className="text-white/20 shrink-0" />
+                                          <span className="text-sm text-white font-medium">{otherUser.School} {otherUser.Degree && `- ${otherUser.Degree}`}</span>
+                                       </div>
+                                     )}
+                                  </div>
+                               </section>
+                             )}
+
+                             {/* Socials */}
+                             {(otherUser.Instagram || otherUser.Twitter) && (
+                               <section className="mb-4">
+                                 <h3 className="text-[10px] font-bold text-white/40 tracking-wider mb-3 uppercase">Socials</h3>
+                                 <div className="flex gap-3">
+                                    {otherUser.Instagram && (
+                                       <a 
+                                         href={`https://instagram.com/${otherUser.Instagram}`} 
+                                         target="_blank" 
+                                         rel="noopener noreferrer"
+                                         onClick={(e) => e.stopPropagation()}
+                                         className="flex-1 bg-[#11131F] border border-white/5 rounded-2xl p-4 flex items-center gap-3 hover:bg-white/5 transition-colors group"
+                                       >
+                                          <Instagram size={18} className="text-pink-500 shrink-0 group-hover:scale-110 transition-transform" />
+                                          <span className="text-sm text-white font-medium truncate group-hover:text-brand-primary transition-colors">@{otherUser.Instagram}</span>
+                                       </a>
+                                    )}
+                                    {otherUser.Twitter && (
+                                       <a 
+                                         href={`https://x.com/${otherUser.Twitter}`} 
+                                         target="_blank" 
+                                         rel="noopener noreferrer"
+                                         onClick={(e) => e.stopPropagation()}
+                                         className="flex-1 bg-[#11131F] border border-white/5 rounded-2xl p-4 flex items-center gap-3 hover:bg-white/5 transition-colors group"
+                                       >
+                                          <Twitter size={18} className="text-blue-400 shrink-0 group-hover:scale-110 transition-transform" />
+                                          <span className="text-sm text-white font-medium truncate group-hover:text-brand-primary transition-colors">@{otherUser.Twitter}</span>
+                                       </a>
+                                    )}
+                                 </div>
+                               </section>
+                             )}
+
+                             <div className="pt-6 border-t border-white/10 uppercase">
+                                <button className="w-full py-4 text-xs font-black text-red-500 hover:text-red-400 transition-colors tracking-widest text-center">
+                                   REPORT PROFILE
+                                </button>
+                             </div>
                           </div>
                         </>
                       ) : (
@@ -447,11 +584,12 @@ export function ChatRoomPage() {
                       registrations.map((reg: any) => (
                          <div key={reg.ID} className="bg-[#11131F] border border-white/5 rounded-[24px] p-4 flex items-center gap-4">
                             <img 
-                              src={reg.UserThumbnail ? getAssetUrl(reg.UserThumbnail) : "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=200"} 
-                              className="w-12 h-12 rounded-full object-cover border border-white/10" 
+                              onClick={() => handleUserClick(reg.UserID)}
+                              src={getAssetUrl(reg.UserThumbnail || reg.UserProfilePhotos?.[0] || '') || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=200"} 
+                              className="w-12 h-12 rounded-full object-cover border border-white/10 cursor-pointer hover:border-brand-accent transition-colors" 
                             />
-                            <div className="flex-1 min-w-0">
-                               <p className="text-sm font-bold text-white truncate">{reg.RealName}</p>
+                            <div className="flex-1 min-w-0" onClick={() => handleUserClick(reg.UserID)}>
+                               <p className="text-sm font-bold text-white truncate cursor-pointer hover:text-brand-accent transition-colors">{reg.RealName}</p>
                                <div className="flex items-center gap-2 mt-1">
                                   <span className={cn(
                                     "text-[8px] font-black uppercase px-2 py-0.5 rounded-full border",
@@ -490,59 +628,184 @@ export function ChatRoomPage() {
                transition={{ type: 'spring', damping: 30, stiffness: 250 }}
                className="absolute inset-0 bg-[#0A0B14] z-[60] flex flex-col overflow-y-auto scrollbar-hide"
              >
-                <div className="relative h-96 w-full overflow-hidden shrink-0">
-                   <img src={getAssetUrl(selectedUser.ProfilePhotos?.[0] || selectedUser.Thumbnail || '') || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=1000"} className="w-full h-full object-cover" />
-                   <div className="absolute inset-0 bg-gradient-to-t from-[#0A0B14] via-[#0A0B14]/40 to-transparent" />
+                <div className="relative h-96 w-full shrink-0 group">
+                   <div 
+                     className="w-full h-full flex overflow-x-auto snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                     onScroll={(e) => {
+                       const idx = Math.round(e.currentTarget.scrollLeft / e.currentTarget.offsetWidth);
+                       setCurrentPhotoIndex(idx);
+                     }}
+                   >
+                      {(selectedUser.ProfilePhotos?.length > 0 ? selectedUser.ProfilePhotos : [selectedUser.Thumbnail || ""]).filter(Boolean).map((photo: string, idx: number) => (
+                         <div key={idx} className="w-full h-full flex-none snap-center relative">
+                            <img src={getAssetUrl(photo) || "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=800"} className="w-full h-full object-cover" />
+                            <div className="absolute inset-0 bg-gradient-to-t from-[#0A0B14] via-[#0A0B14]/40 to-transparent pointer-events-none" />
+                         </div>
+                      ))}
+                   </div>
+
                    <button 
-                     onClick={() => setSelectedUser(null)}
-                     className="absolute top-6 left-6 w-10 h-10 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white/70 hover:text-white transition-colors border border-white/10"
+                     onClick={() => { setSelectedUser(null); setCurrentPhotoIndex(0); }}
+                     className="absolute top-6 left-6 w-10 h-10 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white/70 hover:text-white transition-colors border border-white/10 z-10"
                    >
                      <ChevronLeft size={20} />
                    </button>
-                   <div className="absolute bottom-6 left-8 right-8">
-                      <h2 className="text-4xl font-black text-white tracking-widest uppercase mb-1 drop-shadow-lg">
-                        {selectedUser.RealName}
-                      </h2>
-                      <div className="flex gap-4">
-                        {selectedUser.Gender && <p className="text-sm font-bold text-brand-accent uppercase tracking-widest drop-shadow-md">{selectedUser.Gender}</p>}
-                      </div>
-                   </div>
-                </div>
 
-                <div className="p-8 space-y-8 flex-1">
-                   {selectedUser.Bio && (
-                     <div>
-                        <h4 className="text-[10px] font-black text-white/20 tracking-[0.2em] uppercase mb-4">Bio</h4>
-                        <p className="text-sm font-medium text-white/70 leading-relaxed tracking-tight">{selectedUser.Bio}</p>
+                   <div className="absolute bottom-6 right-6 z-20">
+                       <div className="px-3 py-1.5 bg-black/80 backdrop-blur-md rounded-xl text-xs font-bold text-amber-400 flex items-center shadow-lg border border-white/5 uppercase">
+                          🛡️ {(selectedUser.TrustScore || 100).toFixed(1)} TRUST
+                       </div>
+                   </div>
+
+                   {selectedUser.ProfilePhotos?.length > 1 && (
+                     <div className="absolute top-6 left-0 right-0 flex justify-center gap-1.5 z-10 pointer-events-none">
+                       {selectedUser.ProfilePhotos.map((_: any, idx: number) => (
+                          <div 
+                            key={idx}
+                            className={cn(
+                              "h-1.5 rounded-full transition-all duration-300",
+                              currentPhotoIndex === idx ? "w-4 bg-brand-accent shadow-[0_0_8px_rgba(33,212,253,0.5)]" : "w-1.5 bg-white/30"
+                            )}
+                          />
+                       ))}
                      </div>
                    )}
-                   
-                   <div className="grid grid-cols-2 gap-4">
-                      {selectedUser.JobTitle && (
-                        <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5">
-                           <p className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-1">Work</p>
-                           <p className="text-xs font-bold text-white uppercase">{selectedUser.JobTitle}</p>
-                           {selectedUser.Company && <p className="text-[10px] text-brand-accent font-bold mt-1 uppercase">@ {selectedUser.Company}</p>}
-                        </div>
-                      )}
-                      {selectedUser.School && (
-                        <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5">
-                           <p className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-1">Education</p>
-                           <p className="text-xs font-bold text-white uppercase">{selectedUser.School}</p>
-                           {selectedUser.Degree && <p className="text-[10px] text-brand-accent font-bold mt-1 uppercase">{selectedUser.Degree}</p>}
-                        </div>
-                      )}
-                   </div>
                 </div>
 
-                <div className="p-6 sticky bottom-0 bg-gradient-to-t from-[#0A0B14] via-[#0A0B14] to-transparent pt-10">
-                   <button 
-                     onClick={handleDM}
-                     className="w-full py-5 rounded-[24px] bg-white text-black text-[12px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-3 active:scale-95 transition-all hover:bg-white/90"
-                   >
-                      <Send size={16} />
-                      Send Message
-                   </button>
+                <div className="px-6 -mt-4 relative z-10 space-y-8 pb-32 pt-10">
+                   {/* Name & Bio */}
+                   <div>
+                      <h1 className="text-4xl font-bold text-white mb-6 tracking-tight">{selectedUser.RealName}</h1>
+                      <h3 className="text-[10px] font-bold text-white/40 tracking-wider mb-2 uppercase">About Me</h3>
+                      <p className="text-sm text-white/80 leading-relaxed">
+                        {selectedUser.Bio || "No bio added yet."}
+                      </p>
+                   </div>
+
+                   {/* Vibe Impact */}
+                   <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5">
+                      <p className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-4">Vibe Impact</p>
+                      <div className="flex items-center justify-between">
+                         <div className="flex flex-col">
+                            <span className="text-xl font-black text-white uppercase tracking-tighter">
+                               {selectedUser.HostedCount || 0}
+                            </span>
+                            <span className="text-[8px] font-bold text-white/40 uppercase tracking-widest mt-1">Hosted</span>
+                         </div>
+                         <div className="w-px h-8 bg-white/10 mx-2" />
+                         <div className="flex flex-col">
+                            <span className="text-xl font-black text-brand-accent uppercase tracking-tighter">
+                               {selectedUser.HostingRating ? `${selectedUser.HostingRating}%` : "0%"}
+                            </span>
+                            <span className="text-[8px] font-bold text-white/40 uppercase tracking-widest mt-1">Rating</span>
+                         </div>
+                         <div className="w-px h-8 bg-white/10 mx-2" />
+                         <div className="flex flex-col">
+                            <span className="text-xl font-black text-white uppercase tracking-tighter">
+                               {selectedUser.Reach ? (selectedUser.Reach >= 1000 ? `${(selectedUser.Reach / 1000).toFixed(1)}K` : selectedUser.Reach) : "0"}
+                            </span>
+                            <span className="text-[8px] font-bold text-white/40 uppercase tracking-widest mt-1">Reach</span>
+                         </div>
+                      </div>
+                   </div>
+
+                   {/* Lifestyle */}
+                   {(selectedUser.Gender || selectedUser.HeightCm > 0) && (
+                     <section>
+                        <h3 className="text-[10px] font-bold text-white/40 tracking-wider mb-3 uppercase">Lifestyle</h3>
+                        <div className="space-y-3">
+                           {selectedUser.Gender && (
+                             <div className="bg-[#11131F] border border-white/5 rounded-2xl p-4 flex items-center justify-between">
+                                <div className="flex flex-col">
+                                   <span className="text-[10px] text-white/40 mb-1">Gender</span>
+                                   <span className="text-sm text-white font-medium uppercase">{selectedUser.Gender}</span>
+                                </div>
+                                <UserIcon size={16} className="text-white/20" />
+                             </div>
+                           )}
+
+                           {selectedUser.HeightCm > 0 && (
+                             <div className="grid grid-cols-2 gap-3">
+                                 <div className="bg-[#11131F] border border-white/5 rounded-2xl p-4 flex flex-col justify-center">
+                                   <span className="text-sm text-white font-medium flex items-center gap-2"><span className="text-white/20">📏</span> {selectedUser.HeightCm} cm</span>
+                                </div>
+                             </div>
+                           )}
+                        </div>
+                     </section>
+                   )}
+
+                   {/* Work & Ed */}
+                   {(selectedUser.JobTitle || selectedUser.School) && (
+                     <section>
+                        <h3 className="text-[10px] font-bold text-white/40 tracking-wider mb-3 uppercase">Work & Education</h3>
+                        <div className="space-y-3">
+                           {selectedUser.JobTitle && (
+                             <div className="bg-[#11131F] border border-white/5 rounded-2xl p-4 flex items-center gap-4">
+                                <Briefcase size={18} className="text-white/20 shrink-0" />
+                                <span className="text-sm text-white font-medium">{selectedUser.JobTitle} {selectedUser.Company && `at ${selectedUser.Company}`}</span>
+                             </div>
+                           )}
+                           {selectedUser.School && (
+                             <div className="bg-[#11131F] border border-white/5 rounded-2xl p-4 flex items-center gap-4">
+                                <GraduationCap size={18} className="text-white/20 shrink-0" />
+                                <span className="text-sm text-white font-medium">{selectedUser.School} {selectedUser.Degree && `- ${selectedUser.Degree}`}</span>
+                             </div>
+                           )}
+                        </div>
+                     </section>
+                   )}
+
+                   {/* Socials */}
+                   {(selectedUser.Instagram || selectedUser.Twitter) && (
+                     <section className="mb-4">
+                       <h3 className="text-[10px] font-bold text-white/40 tracking-wider mb-3 uppercase">Socials</h3>
+                       <div className="flex gap-3">
+                          {selectedUser.Instagram && (
+                             <a 
+                               href={`https://instagram.com/${selectedUser.Instagram}`} 
+                               target="_blank" 
+                               rel="noopener noreferrer"
+                               onClick={(e) => e.stopPropagation()}
+                               className="flex-1 bg-[#11131F] border border-white/5 rounded-2xl p-4 flex items-center gap-3 hover:bg-white/5 transition-colors group"
+                             >
+                                <Instagram size={18} className="text-pink-500 shrink-0 group-hover:scale-110 transition-transform" />
+                                <span className="text-sm text-white font-medium truncate group-hover:text-brand-primary transition-colors">@{selectedUser.Instagram}</span>
+                             </a>
+                          )}
+                          {selectedUser.Twitter && (
+                             <a 
+                               href={`https://x.com/${selectedUser.Twitter}`} 
+                               target="_blank" 
+                               rel="noopener noreferrer"
+                               onClick={(e) => e.stopPropagation()}
+                               className="flex-1 bg-[#11131F] border border-white/5 rounded-2xl p-4 flex items-center gap-3 hover:bg-white/5 transition-colors group"
+                             >
+                                <Twitter size={18} className="text-blue-400 shrink-0 group-hover:scale-110 transition-transform" />
+                                <span className="text-sm text-white font-medium truncate group-hover:text-brand-primary transition-colors">@{selectedUser.Twitter}</span>
+                             </a>
+                          )}
+                       </div>
+                     </section>
+                   )}
+
+                   <div className="pt-6 border-t border-white/10 uppercase">
+                      <button className="w-full py-4 text-xs font-black text-red-500 hover:text-red-400 transition-colors tracking-widest text-center">
+                         REPORT PROFILE
+                      </button>
+                   </div>
+
+                   {chat.IsGroup && (
+                       <div className="pt-4">
+                          <button 
+                            onClick={handleDM}
+                            className="w-full py-5 rounded-[24px] bg-white text-black text-[12px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-3 active:scale-95 transition-all hover:bg-white/90"
+                          >
+                             <Send size={16} />
+                             Send Message
+                          </button>
+                       </div>
+                   )}
                 </div>
              </motion.div>
            )}

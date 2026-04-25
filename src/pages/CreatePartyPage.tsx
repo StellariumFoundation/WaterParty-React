@@ -6,6 +6,7 @@ import { useStore } from '../lib/Store';
 import { useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
+import { Geolocation } from '@capacitor/geolocation';
 
 // Fix for default marker icon in leaflet
 const DefaultIcon = L.icon({
@@ -141,13 +142,26 @@ export function CreatePartyPage() {
   };
 
   useEffect(() => {
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition((pos) => {
-        setMapPosition(L.latLng(pos.coords.latitude, pos.coords.longitude));
-      }, (err) => {
-        console.warn("Geolocation disabled or blocked:", err);
-      });
-    }
+    const fetchLocation = async () => {
+      try {
+        if (window.location.protocol !== 'file:' && !(window as any).Capacitor) {
+          if ('geolocation' in navigator) {
+            navigator.geolocation.getCurrentPosition((pos) => {
+              setMapPosition(L.latLng(pos.coords.latitude, pos.coords.longitude));
+            }, (err) => {
+              console.warn("Browser geolocation disabled or blocked:", err);
+            });
+          }
+        } else {
+          await Geolocation.requestPermissions();
+          const pos = await Geolocation.getCurrentPosition();
+          setMapPosition(L.latLng(pos.coords.latitude, pos.coords.longitude));
+        }
+      } catch (e) {
+        console.warn("Location permission denied or unavailable:", e);
+      }
+    };
+    fetchLocation();
   }, []);
 
   useEffect(() => {

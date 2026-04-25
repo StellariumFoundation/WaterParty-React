@@ -245,7 +245,7 @@ async function startServer() {
      VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
   const getPartyByIdStmt = db.prepare('SELECT * FROM parties WHERE ID = ?');
-  const updateUserStmt = db.prepare('UPDATE users SET RealName = ?, Bio = ?, Thumbnail = ?, ProfilePhotos = ?, Instagram = ?, Twitter = ?, Gender = ?, HeightCm = ?, JobTitle = ?, Company = ?, School = ?, Degree = ?, HostedCount = ?, HostingRating = ?, Reach = ? WHERE ID = ?');
+  const updateUserStmt = db.prepare('UPDATE users SET RealName = ?, Bio = ?, Thumbnail = ?, ProfilePhotos = ?, Instagram = ?, Twitter = ?, Gender = ?, HeightCm = ?, JobTitle = ?, Company = ?, School = ?, Degree = ? WHERE ID = ?');
 
   wss.on('connection', (ws: any, req) => {
     ws.on('message', (message: any) => {
@@ -395,9 +395,6 @@ async function startServer() {
                     Payload.Company || '',
                     Payload.School || '',
                     Payload.Degree || '',
-                    Payload.HostedCount || 0,
-                    Payload.HostingRating || 0,
-                    Payload.Reach || 0,
                     Token
                 );
                 const updatedUser = getUserByIdStmt.get(Token);
@@ -449,8 +446,8 @@ async function startServer() {
              }
              case 'GET_REGISTRATIONS': {
                 const { PartyID } = Payload;
-                const regs = db.prepare('SELECT registrations.*, users.RealName, users.Thumbnail as UserThumbnail FROM registrations JOIN users ON registrations.UserID = users.ID WHERE PartyID = ?').all(PartyID);
-                send('REGISTRATIONS_LIST', regs);
+                const regs = db.prepare('SELECT registrations.*, users.RealName, users.Thumbnail as UserThumbnail, users.ProfilePhotos as UserProfilePhotos FROM registrations JOIN users ON registrations.UserID = users.ID WHERE PartyID = ?').all(PartyID);
+                send('REGISTRATIONS_LIST', regs.map((r: any) => ({ ...r, UserProfilePhotos: parseJSON(r.UserProfilePhotos) })));
                 break;
              }
              case 'APPROVE_JOIN_REQUEST': {
@@ -470,8 +467,8 @@ async function startServer() {
                          }
                       }
                    }
-                   const regs = db.prepare('SELECT registrations.*, users.RealName, users.Thumbnail as UserThumbnail FROM registrations JOIN users ON registrations.UserID = users.ID WHERE PartyID = ?').all(reg.PartyID);
-                   send('REGISTRATIONS_LIST', regs);
+                   const regs = db.prepare('SELECT registrations.*, users.RealName, users.Thumbnail as UserThumbnail, users.ProfilePhotos as UserProfilePhotos FROM registrations JOIN users ON registrations.UserID = users.ID WHERE PartyID = ?').all(reg.PartyID);
+                   send('REGISTRATIONS_LIST', regs.map((r: any) => ({ ...r, UserProfilePhotos: parseJSON(r.UserProfilePhotos) })));
                    const refreshedParties = getEnrichedParties(db);
                    broadcast('FEED_UPDATE', refreshedParties);
                    const refreshedChats = db.prepare('SELECT * FROM chats').all().map(mapChat);
