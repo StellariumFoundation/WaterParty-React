@@ -1,14 +1,23 @@
 @import "tailwindcss";
 @import "leaflet/dist/leaflet.css";
 
+@font-face {
+  font-family: "Neue Frutiger World";
+  src: url("/neue_frutiger_world_regular.ttf") format("truetype");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 @theme {
   --color-brand-primary: #FF3B5C;
   --color-brand-secondary: #7042F8;
   --color-brand-accent: #00D2FF;
   --color-brand-bg: #0F0F13;
-  --font-sans: "Helvetica Neue", Arial, sans-serif;
+  --font-sans: "Neue Frutiger World", "Helvetica Neue", Arial, sans-serif;
 }
 
 body {
+  font-family: "Neue Frutiger World", var(--font-sans);
   background-color: var(--color-brand-bg);
 }

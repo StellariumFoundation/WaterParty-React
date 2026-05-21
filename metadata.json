@@ -1,5 +1,5 @@
 {
-  "name": "Vibes - Party Finder",
+  "name": "Water PArty",
   "description": "A Tinder-like app for finding and matching with nearby parties.",
   "requestFramePermissions": ["geolocation"],
   "majorCapabilities": []

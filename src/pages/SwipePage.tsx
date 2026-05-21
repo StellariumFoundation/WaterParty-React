@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Check, Waves, MapPin, Users, Calendar, Clock, ChevronLeft, ChevronRight, Send, Info, Instagram, Twitter, ExternalLink, User as UserIcon, Briefcase, GraduationCap } from 'lucide-react';
@@ -10,7 +10,7 @@ const USER_PLACEHOLDER = "https://images.unsplash.com/photo-1511367461989-f85a21
 const PARTY_PLACEHOLDER = "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?q=80&w=1000";
 
 export function SwipePage() {
-  const { feed, user, sendSocketMessage, removeFromFeed, coords, refreshLocation } = useStore();
+  const { feed, user, sendSocketMessage, removeFromFeed, coords, refreshLocation, chats } = useStore();
   const navigate = useNavigate();
   const [swipeDir, setSwipeDir] = useState<{ [key: string]: 'left' | 'right' | null }>({});
   const [selectedParty, setSelectedParty] = useState<any | null>(null);
