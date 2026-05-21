@@ -206,6 +206,32 @@ async function startServer() {
     res.json(mapUser(safeUser));
   });
 
+  app.get(['/api/feed', '/api/feed/'], (req, res) => {
+    const { lat, lon } = req.query;
+    let mappedParties = getEnrichedParties(db);
+    
+    if (lat && lon) {
+      const Lat = parseFloat(lat as string);
+      const Lon = parseFloat(lon as string);
+      if (!isNaN(Lat) && !isNaN(Lon)) {
+        mappedParties.sort((a: any, b: any) => {
+          const distA = getDistance(Lat, Lon, a.GeoLat || 0, a.GeoLon || 0);
+          const distB = getDistance(Lat, Lon, b.GeoLat || 0, b.GeoLon || 0);
+          return distB - distA; // Descending
+        });
+      }
+    }
+    res.json(mappedParties);
+  });
+
+  app.get(['/api/chats', '/api/chats/'], (req, res) => {
+    const userId = req.headers['x-user-id'] || req.query.userId;
+    if (!userId) {
+      return res.status(400).json({ error: "Missing x-user-id header or userId query parameter" });
+    }
+    res.json(getEnrichedChats(db, userId as string));
+  });
+
   app.get(['/api/users/:id', '/api/users/:id/'], (req, res) => {
     const userRow = getUserByIdStmt.get(req.params.id) as any;
     if (!userRow) return res.status(404).json({ error: "User not found" });

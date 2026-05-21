@@ -21,3 +21,7 @@ body {
   font-family: "Neue Frutiger World", var(--font-sans);
   background-color: var(--color-brand-bg);
 }
+
+* {
+  font-family: "Neue Frutiger World", "Helvetica Neue", Arial, sans-serif !important;
+}

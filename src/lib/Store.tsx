@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Party, ChatRoom } from './types';
-import { WS_BASE } from './constants';
+import { WS_BASE, API_BASE } from './constants';
 import { Geolocation } from '@capacitor/geolocation';
 
 interface StoreContextType {
@@ -57,10 +57,46 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const fastHTTPFetchAll = async (userId: string) => {
+    try {
+      // 1. Instantly fetch updated user profile
+      fetch(`${API_BASE}/api/users/${userId}`)
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data && !data.error) {
+            setUser(data);
+            localStorage.setItem('waterparty_user', JSON.stringify(data));
+          }
+        }).catch(() => {});
+
+      // 2. Instantly fetch chats directly
+      fetch(`${API_BASE}/api/chats?userId=${userId}`)
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data && !data.error) {
+            setChats(data);
+          }
+        }).catch(() => {});
+
+      // 3. Instantly fetch latest parties feed
+      fetch(`${API_BASE}/api/feed`)
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data && !data.error) {
+            setFeed(data);
+          }
+        }).catch(() => {});
+    } catch (e) {}
+  };
+
   useEffect(() => {
     const stored = localStorage.getItem('waterparty_user');
     if (stored) {
-      try { setUser(JSON.parse(stored)); } catch(e){}
+      try { 
+        const parsed = JSON.parse(stored);
+        setUser(parsed);
+        fastHTTPFetchAll(parsed.ID);
+      } catch(e){}
     }
   }, []);
 
@@ -81,6 +117,7 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
              ws?.send(JSON.stringify({ Event: ev, Payload: payload, Token: user.ID }));
           };
           send('GET_CHATS', {});
+          send('GET_FEED', { Lat: coords?.lat || 0, Lon: coords?.lon || 0 });
        };
 
        ws.onmessage = (msg) => {
@@ -128,6 +165,7 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
   const login = (u: User) => {
     setUser(u);
     localStorage.setItem('waterparty_user', JSON.stringify(u));
+    fastHTTPFetchAll(u.ID);
   };
 
   const logout = () => {

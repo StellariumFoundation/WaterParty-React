@@ -5,7 +5,7 @@ import { useStore } from '../lib/Store';
 import { getAssetUrl } from '../lib/constants';
 
 export function ProfilePage() {
-  const { user, logout, sendSocketMessage } = useStore();
+  const { user, logout, login, sendSocketMessage } = useStore();
   const [isEditing, setIsEditing] = useState(false);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -59,12 +59,14 @@ export function ProfilePage() {
     };
 
     const validatedData = {
+      ...user,
       ...editData,
       Instagram: cleanHandle(editData.Instagram),
       Twitter: cleanHandle(editData.Twitter),
       Thumbnail: editData.ProfilePhotos.length > 0 ? editData.ProfilePhotos[0] : ''
     };
 
+    login(validatedData);
     sendSocketMessage('UPDATE_PROFILE', validatedData);
     setIsEditing(false);
   };

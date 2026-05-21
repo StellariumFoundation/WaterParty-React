@@ -112,18 +112,18 @@ export function AuthPage() {
       <div className="w-full max-w-md my-8 flex flex-col items-center relative z-10">
         
         {/* Minimalized Logo & Header */}
-        <div className="flex items-center gap-3 mb-6 select-none animate-fadeIn">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-brand-accent to-brand-secondary flex items-center justify-center shadow-lg">
-            <Waves size={20} className="text-white" />
+        <div className="flex items-center gap-2 mb-4 select-none animate-fadeIn">
+          <div className={`${isLogin ? 'w-8 h-8 rounded-xl' : 'w-10 h-10 rounded-2xl'} bg-gradient-to-tr from-brand-accent to-brand-secondary flex items-center justify-center shadow-lg transition-all`}>
+            <Waves size={isLogin ? 16 : 20} className="text-white" />
           </div>
-          <h1 className="text-2xl font-black tracking-[0.2em] uppercase bg-gradient-to-r from-white to-white/80 bg-clip-text text-transparent">
+          <h1 className={`${isLogin ? 'text-lg' : 'text-2xl'} font-black tracking-[0.2em] uppercase bg-gradient-to-r from-white to-white/80 bg-clip-text text-transparent transition-all`}>
             WaterParty
           </h1>
         </div>
 
         {/* Elegant Form Card */}
-        <div className="w-full bg-[#11131F]/80 backdrop-blur-2xl border border-white/10 rounded-[28px] p-6 sm:p-8 shadow-[0_24px_50px_rgba(0,0,0,0.5)]">
-          <h2 className="text-sm font-black uppercase tracking-[0.22em] mb-6 text-center text-white/50">
+        <div className={`w-full bg-[#11131F]/80 backdrop-blur-2xl border border-white/10 ${isLogin ? 'rounded-[24px] p-5 shadow-[0_16px_40px_rgba(0,0,0,0.5)]' : 'rounded-[28px] p-6 sm:p-8 shadow-[0_24px_50px_rgba(0,0,0,0.5)]'} transition-all`}>
+          <h2 className={`text-[10px] font-black uppercase tracking-[0.25em] ${isLogin ? 'mb-4' : 'mb-6'} text-center text-white/50`}>
             {isLogin ? "Sign In" : "Registration Hub"}
           </h2>
 
@@ -240,8 +240,8 @@ export function AuthPage() {
 
              {/* Email/Username Input */}
              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Mail size={16} className="text-white/20" />
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                  <Mail size={14} className="text-white/20" />
                 </div>
                 <input
                   type="text"
@@ -249,15 +249,15 @@ export function AuthPage() {
                   placeholder="EMAIL OR USERNAME"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
-                  className="w-full bg-white/[0.03] hover:bg-white/[0.05] border border-white/10 rounded-2xl py-3.5 pl-11 pr-4 text-xs font-bold placeholder:text-white/30 outline-none focus:border-brand-accent focus:bg-white/[0.06] transition-all"
+                  className={`w-full bg-white/[0.03] hover:bg-white/[0.05] border border-white/10 rounded-xl ${isLogin ? 'py-2.5 text-[10px] pl-10 pr-3 font-semibold placeholder:text-white/20' : 'py-3.5 text-xs font-bold pl-11 pr-4 placeholder:text-white/30'} outline-none focus:border-brand-accent focus:bg-white/[0.06] transition-all`}
                   autoComplete="username"
                 />
              </div>
 
              {/* Password Input */}
              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Lock size={16} className="text-white/20" />
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                  <Lock size={14} className="text-white/20" />
                 </div>
                 <input
                   type="password"
@@ -265,13 +265,13 @@ export function AuthPage() {
                   placeholder="PASSWORD"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
-                  className="w-full bg-white/[0.03] hover:bg-white/[0.05] border border-white/10 rounded-2xl py-3.5 pl-11 pr-4 text-xs font-bold placeholder:text-white/30 outline-none focus:border-brand-accent focus:bg-white/[0.06] transition-all"
+                  className={`w-full bg-white/[0.03] hover:bg-white/[0.05] border border-white/10 rounded-xl ${isLogin ? 'py-2.5 text-[10px] pl-10 pr-3 font-semibold placeholder:text-white/20' : 'py-3.5 text-xs font-bold pl-11 pr-4 placeholder:text-white/30'} outline-none focus:border-brand-accent focus:bg-white/[0.06] transition-all`}
                   autoComplete={isLogin ? "current-password" : "new-password"}
                 />
              </div>
 
              {error && (
-                <p className="text-brand-primary text-xs font-bold text-center mt-3 bg-brand-primary/5 py-2.5 px-4 rounded-xl border border-brand-primary/15 animate-shake">
+                <p className="text-brand-primary text-[10px] font-bold text-center mt-3 bg-brand-primary/5 py-2 px-3 rounded-xl border border-brand-primary/15 animate-shake">
                   ⚠️ {error}
                 </p>
              )}
@@ -280,7 +280,7 @@ export function AuthPage() {
              <button 
                 disabled={loading} 
                 type="submit" 
-                className="w-full mt-4 py-3.5 rounded-2xl bg-gradient-to-r from-brand-accent to-brand-secondary text-white font-black tracking-widest text-xs uppercase shadow-md active:scale-95 hover:brightness-115 hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-50 disabled:pointer-events-none"
+                className={`w-full ${isLogin ? 'mt-3 py-2.5 text-[10px] tracking-[0.15em]' : 'mt-4 py-3.5 text-xs tracking-widest'} rounded-xl bg-gradient-to-r from-brand-accent to-brand-secondary text-white font-black uppercase shadow-md active:scale-95 hover:brightness-115 hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-50 disabled:pointer-events-none`}
              >
                {loading ? 'PROCESSING...' : (isLogin ? 'ENTER' : 'REGISTER')}
              </button>
@@ -290,7 +290,7 @@ export function AuthPage() {
         {/* Form Toggle Link */}
         <button 
           onClick={() => { setIsLogin(!isLogin); setError(''); }} 
-          className="mt-6 text-xs font-black tracking-widest text-white/45 uppercase hover:text-white transition-colors duration-200"
+          className="mt-5 text-[9px] font-black tracking-widest text-white/45 uppercase hover:text-white transition-colors duration-200"
         >
           {isLogin ? "NO ACCOUNT? " : "ALREADY REGISTERED? "}
           <span className="text-brand-accent">{isLogin ? "CREATE ONE" : "SIGN IN"}</span>
