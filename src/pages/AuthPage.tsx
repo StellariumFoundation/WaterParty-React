@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useStore } from '../lib/Store';
 import { API_BASE } from '../lib/constants';
-import { Waves, Mail, Lock, User as UserIcon, Camera, PenTool, Link2 } from 'lucide-react';
+import { Waves, Mail, Lock, User as UserIcon, Camera, PenTool, X, Plus } from 'lucide-react';
 import { Geolocation } from '@capacitor/geolocation';
 
 export function AuthPage() {
@@ -9,7 +9,7 @@ export function AuthPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  const [photoUrl, setPhotoUrl] = useState('');
+  const [profilePhotos, setProfilePhotos] = useState<string[]>([]);
   const [bio, setBio] = useState('');
   const [instagram, setInstagram] = useState('');
   const [twitter, setTwitter] = useState('');
@@ -17,6 +17,28 @@ export function AuthPage() {
   const { login } = useStore();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const remainingSlots = 9 - profilePhotos.length;
+    const filesToProcess = files.slice(0, remainingSlots) as File[];
+
+    filesToProcess.forEach(file => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setProfilePhotos(prev => {
+          if (prev.length >= 9) return prev;
+          return [...prev, reader.result as string];
+        });
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const removePhoto = (index: number) => {
+    setProfilePhotos(prev => prev.filter((_, i) => i !== index));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,6 +46,11 @@ export function AuthPage() {
     
     if (!isLogin && password.length < 8) {
        setError('Password must be at least 8 characters long');
+       return;
+    }
+
+    if (!isLogin && profilePhotos.length === 0) {
+       setError('Please upload at least 1 profile photo');
        return;
     }
 
@@ -35,8 +62,8 @@ export function AuthPage() {
         user: { 
            RealName: name, 
            Email: email, 
-           ProfilePhotos: photoUrl ? [photoUrl] : [],
-           Thumbnail: photoUrl || '',
+           ProfilePhotos: profilePhotos,
+           Thumbnail: profilePhotos[0] || '',
            Bio: bio,
            Instagram: instagram,
            Twitter: twitter
@@ -78,40 +105,83 @@ export function AuthPage() {
 
   return (
     <div className="min-h-[100dvh] w-full flex flex-col items-center justify-center p-6 bg-[#090A10] text-white absolute inset-0 z-[100] overflow-y-auto">
-      {/* Dynamic Background Premium Glows */}
-      <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-brand-accent/20 blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-brand-secondary/20 blur-[120px] pointer-events-none" />
+      {/* Background Premium Ambient Glows */}
+      <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-brand-accent/15 blur-[120px] pointer-events-none animate-pulse" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-brand-secondary/15 blur-[120px] pointer-events-none animate-pulse" />
       
       <div className="w-full max-w-md my-8 flex flex-col items-center relative z-10">
         
-        {/* Animated Custom Logo */}
-        <div className="relative mb-6 group select-none">
-          <div className="absolute inset-0 bg-gradient-to-tr from-brand-accent to-brand-secondary rounded-3xl blur-2xl opacity-40 group-hover:opacity-60 transition-opacity duration-500 scale-110" />
-          <div className="relative flex items-center justify-center w-20 h-20 rounded-[28px] bg-gradient-to-tr from-[#11131F] to-[#1D2138] border border-white/10 shadow-[0_8px_32px_rgba(33,212,253,0.15)]">
-            <Waves size={36} className="text-brand-accent animate-pulse" />
+        {/* Minimalized Logo & Header */}
+        <div className="flex items-center gap-3 mb-6 select-none animate-fadeIn">
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-brand-accent to-brand-secondary flex items-center justify-center shadow-lg">
+            <Waves size={20} className="text-white" />
           </div>
+          <h1 className="text-2xl font-black tracking-[0.2em] uppercase bg-gradient-to-r from-white to-white/80 bg-clip-text text-transparent">
+            WaterParty
+          </h1>
         </div>
 
-        <h1 className="text-3xl font-black tracking-[0.2em] mb-2 uppercase bg-gradient-to-r from-white via-white/90 to-white/70 bg-clip-text text-transparent">
-          WaterParty
-        </h1>
-        <p className="text-[10px] tracking-[0.3em] text-brand-accent mb-8 uppercase font-bold px-4 py-1.5 rounded-full border border-brand-accent/30 bg-brand-accent/5 backdrop-blur-md">
-          Dive into matching parties
-        </p>
-
         {/* Elegant Form Card */}
-        <div className="w-full bg-[#11131F]/70 backdrop-blur-xl border border-white/10 rounded-[32px] p-8 shadow-[0_24px_64px_rgba(0,0,0,0.4)]">
-          <h2 className="text-xl font-black uppercase tracking-wider mb-6 text-center text-white/90">
-            {isLogin ? "Welcome Back" : "Join the Wave"}
+        <div className="w-full bg-[#11131F]/80 backdrop-blur-2xl border border-white/10 rounded-[28px] p-6 sm:p-8 shadow-[0_24px_50px_rgba(0,0,0,0.5)]">
+          <h2 className="text-sm font-black uppercase tracking-[0.22em] mb-6 text-center text-white/50">
+            {isLogin ? "Sign In" : "Registration Hub"}
           </h2>
 
           <form onSubmit={handleSubmit} className="space-y-4">
              {!isLogin && (
                 <div className="space-y-4 animate-fadeIn">
+                  
+                  {/* Gallery Grid (Up to 9 Photos) */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] font-black tracking-widest text-brand-accent uppercase">
+                        GALLERY PHOTOS (UP TO 9)
+                      </label>
+                      <span className="text-[10px] font-bold text-white/30">{profilePhotos.length}/9</span>
+                    </div>
+                    
+                    <div className="grid grid-cols-3 gap-2">
+                      {profilePhotos.map((photo, index) => (
+                        <div key={index} className="relative aspect-[3/4] rounded-2xl overflow-hidden border border-white/10 bg-[#16192E] group">
+                          <img src={photo} alt="" className="w-full h-full object-cover animate-scaleUp" />
+                          <button
+                            type="button"
+                            onClick={() => removePhoto(index)}
+                            className="absolute top-1 right-1 bg-black/80 w-5 h-5 rounded-full flex items-center justify-center text-white hover:bg-black p-1 transition-colors"
+                          >
+                            <X size={10} />
+                          </button>
+                          <div className="absolute bottom-1 left-2 bg-brand-accent/95 px-1.5 py-0.5 rounded-full text-[8.5px] font-black text-[#0A0B14] uppercase">
+                            {index === 0 ? 'MAIN' : `#${index + 1}`}
+                          </div>
+                        </div>
+                      ))}
+                      
+                      {profilePhotos.length < 9 && (
+                        <div 
+                          onClick={() => fileInputRef.current?.click()}
+                          className="aspect-[3/4] rounded-2xl border border-dashed border-brand-accent/30 bg-brand-accent/5 hover:bg-brand-accent/10 cursor-pointer text-brand-accent flex flex-col items-center justify-center transition-all active:scale-95"
+                        >
+                          <Plus size={20} className="animate-pulse" />
+                          <span className="text-[8px] font-black tracking-widest uppercase mt-1">ADD PHOTO</span>
+                        </div>
+                      )}
+                    </div>
+                    
+                    <input 
+                      type="file" 
+                      ref={fileInputRef} 
+                      accept="image/*" 
+                      multiple 
+                      className="hidden" 
+                      onChange={handleImageUpload} 
+                    />
+                  </div>
+
                   {/* Full Name Input */}
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                      <UserIcon size={18} className="text-white/20" />
+                      <UserIcon size={16} className="text-white/20" />
                     </div>
                     <input
                       type="text"
@@ -119,60 +189,28 @@ export function AuthPage() {
                       placeholder="FULL NAME"
                       value={name}
                       onChange={e => setName(e.target.value)}
-                      className="w-full bg-white/[0.03] hover:bg-white/[0.05] border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm font-bold placeholder:text-white/30 outline-none focus:border-brand-accent focus:bg-white/[0.06] transition-all"
+                      className="w-full bg-white/[0.03] hover:bg-white/[0.05] border border-white/10 rounded-2xl py-3.5 pl-11 pr-4 text-xs font-bold placeholder:text-white/30 outline-none focus:border-brand-accent focus:bg-white/[0.06] transition-all"
                       autoComplete="name"
                     />
-                  </div>
-                  
-                  {/* Profile Photo Upload Selector */}
-                  <div className="relative">
-                    <div 
-                       onClick={() => {
-                         const fileInput = document.createElement('input');
-                         fileInput.type = 'file';
-                         fileInput.accept = 'image/*';
-                         fileInput.onchange = (e: any) => {
-                           const file = e.target.files?.[0];
-                           if (file) {
-                             const reader = new FileReader();
-                             reader.onloadend = () => setPhotoUrl(reader.result as string);
-                             reader.readAsDataURL(file);
-                           }
-                         };
-                         fileInput.click();
-                       }}
-                       className="w-full bg-white/[0.03] hover:bg-white/[0.06] border border-white/10 rounded-2xl p-4 text-sm font-bold text-white/50 cursor-pointer transition-colors flex items-center justify-between"
-                    >
-                       <div className="flex items-center gap-3">
-                         {photoUrl ? (
-                           <div className="w-10 h-10 rounded-full overflow-hidden border border-brand-accent/50 flex-shrink-0">
-                             <img src={photoUrl} alt="Preview" className="w-full h-full object-cover animate-scaleUp" />
-                           </div>
-                         ) : <Camera size={18} className="text-white/25" />}
-                         <span className={photoUrl ? "text-brand-accent text-xs tracking-wider" : "text-white/30 text-xs"}>
-                           {photoUrl ? "PHOTO ATTACHED ✅" : "SELECT PROFILE PHOTO"}
-                         </span>
-                       </div>
-                    </div>
                   </div>
 
                   {/* Bio Area */}
                   <div className="relative">
-                    <div className="absolute top-4 left-4 pointer-events-none">
-                      <PenTool size={16} className="text-white/20" />
+                    <div className="absolute top-3.5 left-4 pointer-events-none animate-fadeIn">
+                      <PenTool size={14} className="text-white/20" />
                     </div>
                     <textarea
                       placeholder="BIO (Tell us about your party vibe)"
                       value={bio}
                       onChange={e => setBio(e.target.value)}
-                      className="w-full bg-white/[0.03] hover:bg-white/[0.05] border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm font-bold placeholder:text-white/30 outline-none focus:border-brand-accent focus:bg-white/[0.06] transition-all min-h-[90px] resize-none"
+                      className="w-full bg-white/[0.03] hover:bg-white/[0.05] border border-white/10 rounded-2xl py-3.5 pl-11 pr-4 text-xs font-bold placeholder:text-white/30 outline-none focus:border-brand-accent focus:bg-white/[0.06] transition-all min-h-[75px] resize-none"
                     />
                   </div>
                   
                   {/* Instagram & Twitter Handles */}
-                  <div className="flex gap-3">
+                  <div className="flex gap-2.5">
                      <div className="relative flex-1">
-                       <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-white/20 font-bold text-xs uppercase tracking-widest">
+                       <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-white/25 font-black text-[9px] uppercase tracking-widest">
                          ig
                        </div>
                        <input
@@ -180,12 +218,12 @@ export function AuthPage() {
                          placeholder="INSTAGRAM"
                          value={instagram}
                          onChange={e => setInstagram(e.target.value)}
-                         className="w-full bg-white/[0.03] hover:bg-white/[0.05] border border-white/10 rounded-2xl py-4 pl-10 pr-4 text-sm font-bold placeholder:text-white/30 outline-none focus:border-brand-accent transition-all"
+                         className="w-full bg-white/[0.03] hover:bg-white/[0.05] border border-white/10 rounded-2xl py-3 pl-9 pr-3 text-xs font-bold placeholder:text-white/35 outline-none focus:border-brand-accent transition-all"
                        />
                      </div>
                      
                      <div className="relative flex-1">
-                       <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-white/20 font-bold text-xs uppercase tracking-widest">
+                       <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-white/25 font-black text-[9px] uppercase tracking-widest">
                          x
                        </div>
                        <input
@@ -193,7 +231,7 @@ export function AuthPage() {
                          placeholder="TWITTER"
                          value={twitter}
                          onChange={e => setTwitter(e.target.value)}
-                         className="w-full bg-white/[0.03] hover:bg-white/[0.05] border border-white/10 rounded-2xl py-4 pl-10 pr-4 text-sm font-bold placeholder:text-white/30 outline-none focus:border-brand-accent transition-all"
+                         className="w-full bg-white/[0.03] hover:bg-white/[0.05] border border-white/10 rounded-2xl py-3 pl-9 pr-3 text-xs font-bold placeholder:text-white/35 outline-none focus:border-brand-accent transition-all"
                        />
                      </div>
                   </div>
@@ -203,7 +241,7 @@ export function AuthPage() {
              {/* Email/Username Input */}
              <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Mail size={18} className="text-white/20" />
+                  <Mail size={16} className="text-white/20" />
                 </div>
                 <input
                   type="text"
@@ -211,7 +249,7 @@ export function AuthPage() {
                   placeholder="EMAIL OR USERNAME"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
-                  className="w-full bg-white/[0.03] hover:bg-white/[0.05] border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm font-bold placeholder:text-white/30 outline-none focus:border-brand-accent focus:bg-white/[0.06] transition-all"
+                  className="w-full bg-white/[0.03] hover:bg-white/[0.05] border border-white/10 rounded-2xl py-3.5 pl-11 pr-4 text-xs font-bold placeholder:text-white/30 outline-none focus:border-brand-accent focus:bg-white/[0.06] transition-all"
                   autoComplete="username"
                 />
              </div>
@@ -219,7 +257,7 @@ export function AuthPage() {
              {/* Password Input */}
              <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Lock size={18} className="text-white/20" />
+                  <Lock size={16} className="text-white/20" />
                 </div>
                 <input
                   type="password"
@@ -227,13 +265,13 @@ export function AuthPage() {
                   placeholder="PASSWORD"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
-                  className="w-full bg-white/[0.03] hover:bg-white/[0.05] border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm font-bold placeholder:text-white/30 outline-none focus:border-brand-accent focus:bg-white/[0.06] transition-all"
+                  className="w-full bg-white/[0.03] hover:bg-white/[0.05] border border-white/10 rounded-2xl py-3.5 pl-11 pr-4 text-xs font-bold placeholder:text-white/30 outline-none focus:border-brand-accent focus:bg-white/[0.06] transition-all"
                   autoComplete={isLogin ? "current-password" : "new-password"}
                 />
              </div>
 
              {error && (
-                <p className="text-brand-primary text-xs font-bold text-center mt-4 bg-brand-primary/5 py-3 px-4 rounded-xl border border-brand-primary/20 animate-shake">
+                <p className="text-brand-primary text-xs font-bold text-center mt-3 bg-brand-primary/5 py-2.5 px-4 rounded-xl border border-brand-primary/15 animate-shake">
                   ⚠️ {error}
                 </p>
              )}
@@ -242,9 +280,9 @@ export function AuthPage() {
              <button 
                 disabled={loading} 
                 type="submit" 
-                className="w-full mt-6 py-4 rounded-2xl bg-gradient-to-r from-brand-accent to-brand-secondary text-white font-black tracking-widest text-xs uppercase shadow-[0_8px_24px_rgba(33,212,253,0.3)] active:scale-95 hover:shadow-[0_12px_32px_rgba(33,212,253,0.4)] hover:brightness-110 hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-50 disabled:pointer-events-none"
+                className="w-full mt-4 py-3.5 rounded-2xl bg-gradient-to-r from-brand-accent to-brand-secondary text-white font-black tracking-widest text-xs uppercase shadow-md active:scale-95 hover:brightness-115 hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-50 disabled:pointer-events-none"
              >
-               {loading ? 'PROCESSING...' : (isLogin ? 'ENTER THE PARTY' : 'CREATE ACCOUNT')}
+               {loading ? 'PROCESSING...' : (isLogin ? 'ENTER' : 'REGISTER')}
              </button>
           </form>
         </div>
@@ -252,9 +290,9 @@ export function AuthPage() {
         {/* Form Toggle Link */}
         <button 
           onClick={() => { setIsLogin(!isLogin); setError(''); }} 
-          className="mt-8 text-xs font-black tracking-widest text-white/40 uppercase hover:text-white hover:scale-105 transition-all duration-200"
+          className="mt-6 text-xs font-black tracking-widest text-white/45 uppercase hover:text-white transition-colors duration-200"
         >
-          {isLogin ? "NO ACCOUNT? " : "ALREADY ENROLLED? "}
+          {isLogin ? "NO ACCOUNT? " : "ALREADY REGISTERED? "}
           <span className="text-brand-accent">{isLogin ? "CREATE ONE" : "SIGN IN"}</span>
         </button>
         
