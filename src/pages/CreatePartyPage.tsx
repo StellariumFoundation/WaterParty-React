@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Camera, Shield, Wallet, FileText, MapPin, Calendar, Clock, Hourglass, Check, X, Sparkles, Map as MapIcon, Globe, Loader2, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { cn } from '../lib/utils';
+import { cn, compressImage } from '../lib/utils';
 import { useStore } from '../lib/Store';
 import { useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
@@ -177,8 +177,11 @@ export function CreatePartyPage() {
 
     filesToProcess.forEach(file => {
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setPartyPhotos(prev => [...prev, reader.result as string]);
+      reader.onloadend = async () => {
+        if (reader.result) {
+          const compressed = await compressImage(reader.result as string);
+          setPartyPhotos(prev => [...prev, compressed]);
+        }
       };
       reader.readAsDataURL(file);
     });
@@ -189,64 +192,118 @@ export function CreatePartyPage() {
   };
 
   return (
-    <div className="h-full w-full bg-transparent flex flex-col overflow-y-auto pt-6 px-6 scrollbar-hide pb-32">
+    <div className="h-full w-full bg-transparent flex flex-col overflow-y-auto pt-4 px-4 scrollbar-hide pb-28">
       
       {/* TILE HEADER */}
-      <div className="mb-8">
-        <div className="bg-[#11131F] border border-white/5 rounded-[32px] p-8 relative overflow-hidden group shadow-2xl shadow-brand-primary/10">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-brand-primary/10 blur-[80px] -mr-32 -mt-32 transition-all group-hover:bg-brand-primary/20" />
-          <div className="relative z-10 flex flex-col items-center text-center">
-            <div className="w-16 h-16 bg-gradient-to-br from-brand-primary to-brand-secondary rounded-3xl flex items-center justify-center mb-4 transform rotate-3 shadow-xl">
-              <Sparkles className="text-white" size={32} />
+      <div className="mb-4">
+        <div className="bg-[#11131F] border border-white/5 rounded-2xl p-4 relative overflow-hidden group shadow-lg">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-brand-primary/10 blur-[40px] -mr-16 -mt-16" />
+          <div className="relative z-10 flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-brand-primary to-brand-secondary rounded-xl flex items-center justify-center shrink-0 shadow-lg">
+              <Sparkles className="text-white" size={18} />
             </div>
-            <h2 className="text-3xl font-black text-white tracking-widest uppercase mb-1">HOST PARTY</h2>
-            <p className="text-[10px] font-bold text-white/30 tracking-[0.2em] uppercase">Set the frequency of the night</p>
+            <div>
+              <h2 className="text-lg font-black text-white tracking-widest uppercase mb-0.5">HOST PARTY</h2>
+              <p className="text-[8px] font-bold text-white/30 tracking-[0.15em] uppercase">Set the frequency of the night</p>
+            </div>
           </div>
         </div>
       </div>
 
       {errors.length > 0 && (
-        <div className="mb-6 bg-red-500/10 border border-red-500/20 rounded-2xl p-4">
-          {errors.map((e, idx) => <p key={idx} className="text-xs text-red-500 font-bold uppercase tracking-wider mb-1">• {e}</p>)}
+        <div className="mb-4 bg-red-500/10 border border-red-500/20 rounded-xl p-3">
+          {errors.map((e, idx) => <p key={idx} className="text-[10px] text-red-500 font-bold uppercase tracking-wider mb-0.5">• {e}</p>)}
         </div>
       )}
 
       {success && (
-        <div className="mb-6 bg-brand-accent/10 border border-brand-accent/20 rounded-2xl p-6 text-center">
-           <div className="w-12 h-12 bg-brand-accent rounded-full flex items-center justify-center mx-auto mb-3 shadow-lg shadow-brand-accent/20">
-              <Check className="text-[#0A0B14]" size={24} />
+        <div className="mb-4 bg-brand-accent/10 border border-brand-accent/20 rounded-xl p-4 text-center">
+           <div className="w-10 h-10 bg-brand-accent rounded-full flex items-center justify-center mx-auto mb-2 shadow-lg shadow-brand-accent/20">
+              <Check className="text-[#0A0B14]" size={20} />
            </div>
-           <p className="text-sm font-black text-white tracking-widest uppercase">Party Created!</p>
-           <p className="text-[9px] font-bold text-white/40 uppercase mt-1">Redirecting to feed...</p>
+           <p className="text-xs font-black text-white tracking-widest uppercase">Party Created!</p>
+           <p className="text-[8px] font-bold text-white/40 uppercase mt-0.5">Redirecting to feed...</p>
         </div>
       )}
 
-      <div className="space-y-10">
+      <div className="space-y-4">
+
+         {/* GALLERY AT THE TOP */}
+         <section>
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center gap-1.5">
+                <div className="w-1 h-2.5 bg-brand-accent rounded-full" />
+                <h3 className="text-[9px] font-black text-white/40 tracking-[0.2em] uppercase">Gallery</h3>
+              </div>
+              <span className="text-[8px] font-black text-white/20 tracking-widest">{partyPhotos.length}/16</span>
+            </div>
+            
+            <div className="grid grid-cols-5 gap-1.5">
+              {partyPhotos.map((photo, index) => (
+                 <motion.div 
+                   initial={{ opacity: 0, scale: 0.9 }}
+                   animate={{ opacity: 1, scale: 1 }}
+                   key={index} 
+                   className="relative aspect-square rounded-lg overflow-hidden group shadow-sm border border-white/5"
+                 >
+                   <img src={photo} alt="" className="w-full h-full object-cover" />
+                   <button 
+                     type="button"
+                     onClick={() => removePhoto(index)}
+                     className="absolute top-0.5 right-0.5 bg-black/70 backdrop-blur-md w-4 h-4 rounded-full flex items-center justify-center text-white hover:bg-red-500 transition-colors"
+                   >
+                     <X size={8} />
+                   </button>
+                 </motion.div>
+              ))}
+              {partyPhotos.length < 16 && (
+                 <button 
+                   type="button"
+                   onClick={() => fileInputRef.current?.click()}
+                   className="aspect-square bg-[#11131F]/90 border border-dashed border-white/10 rounded-lg flex items-center justify-center flex-col gap-1 hover:bg-white/5 hover:border-brand-accent/20 transition-all group"
+                 >
+                   <div className="w-6 h-6 bg-white/5 rounded-md flex items-center justify-center group-hover:scale-105 transition-transform">
+                     <Camera size={12} className="text-white/20 group-hover:text-brand-accent transition-colors" />
+                   </div>
+                   <span className="text-[7px] font-black text-white/20 uppercase tracking-widest">Add</span>
+                 </button>
+              )}
+            </div>
+            
+            <input 
+               type="file" 
+               ref={fileInputRef} 
+               accept="image/*" 
+               multiple
+               className="hidden" 
+               onChange={handleImageUpload} 
+            />
+         </section>
         
         {/* DETAILS SECTION */}
         <section>
-          <div className="flex items-center gap-3 mb-4">
+          <div className="flex items-center gap-2 mb-2">
              <div className="w-1 h-3 bg-brand-accent rounded-full" />
              <h3 className="text-[10px] font-black text-white/40 tracking-[0.2em] uppercase">Core Details</h3>
           </div>
-          <div className="bg-[#11131F] border border-white/5 rounded-[32px] p-6 space-y-8">
+          <div className="bg-[#11131F] border border-white/5 rounded-2xl p-4 space-y-4">
              <div className="relative">
                 <input 
                   type="text" 
                   placeholder="PARTY TITLE" 
                   value={title} 
                   onChange={e => setTitle(e.target.value)} 
-                  className="w-full bg-transparent border-b-2 border-white/5 py-3 outline-none text-xl font-black text-white placeholder:text-white/10 tracking-tight focus:border-brand-accent transition-colors uppercase" 
+                  className="w-full bg-transparent border-b border-white/5 py-1.5 outline-none text-base font-black text-white placeholder:text-white/10 tracking-tight focus:border-brand-accent transition-colors uppercase" 
                 />
              </div>
              
-             <div className="flex gap-4">
-                <FileText size={20} className="text-brand-accent shrink-0 mt-1" />
+             <div className="flex gap-3">
+                <FileText size={16} className="text-brand-accent shrink-0 mt-0.5" />
                 <textarea 
                   placeholder="WHAT IS THE VIBE? DESCRIBE THE NIGHT..." 
                   value={description} 
                   onChange={e => setDescription(e.target.value)} 
-                  className="w-full bg-transparent outline-none text-sm text-white/80 placeholder:text-white/10 min-h-[100px] resize-none leading-relaxed" 
+                  className="w-full bg-transparent outline-none text-xs text-white/80 placeholder:text-white/10 min-h-[60px] resize-none leading-relaxed" 
                 />
              </div>
           </div>
@@ -254,42 +311,42 @@ export function CreatePartyPage() {
 
         {/* LOGISTICS SECTION */}
         <section>
-          <div className="flex items-center gap-3 mb-4">
+          <div className="flex items-center gap-2 mb-2">
              <div className="w-1 h-3 bg-brand-accent rounded-full" />
              <h3 className="text-[10px] font-black text-white/40 tracking-[0.2em] uppercase">Logistics</h3>
           </div>
           
-          <div className="grid grid-cols-2 gap-4 mb-4">
-             <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5">
-                <Calendar size={16} className="text-brand-accent mb-3" />
-                <label className="text-[9px] font-bold text-white/20 uppercase tracking-widest block mb-1">Pick Date</label>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+             <div className="bg-[#11131F] border border-white/5 rounded-2xl p-3.5">
+                <Calendar size={14} className="text-brand-accent mb-2" />
+                <label className="text-[8px] font-bold text-white/20 uppercase tracking-widest block mb-0.5">Pick Date</label>
                 <input 
                   type="date" 
                   value={partyDate} 
                   onChange={e => setPartyDate(e.target.value)}
-                  className="bg-transparent border-none outline-none text-sm font-bold text-white w-full uppercase [color-scheme:dark]" 
+                  className="bg-transparent border-none outline-none text-xs font-bold text-white w-full uppercase [color-scheme:dark]" 
                 />
              </div>
-             <div className="bg-[#11131F] border border-white/5 rounded-3xl p-5">
-                <Clock size={16} className="text-brand-accent mb-3" />
-                <label className="text-[9px] font-bold text-white/20 uppercase tracking-widest block mb-1">Door Time</label>
+             <div className="bg-[#11131F] border border-white/5 rounded-2xl p-3.5">
+                <Clock size={14} className="text-brand-accent mb-2" />
+                <label className="text-[8px] font-bold text-white/20 uppercase tracking-widest block mb-0.5">Door Time</label>
                 <input 
                   type="time" 
                   value={partyTime} 
                   onChange={e => setPartyTime(e.target.value)}
-                  className="bg-transparent border-none outline-none text-sm font-bold text-white w-full [color-scheme:dark]" 
+                  className="bg-transparent border-none outline-none text-xs font-bold text-white w-full [color-scheme:dark]" 
                 />
              </div>
           </div>
 
-          <div className="bg-[#11131F] border border-white/5 rounded-[32px] p-6 space-y-6">
+          <div className="bg-[#11131F] border border-white/5 rounded-2xl p-4 space-y-4">
              <div>
-                <div className="flex justify-between items-center mb-4">
-                   <div className="flex items-center gap-2">
-                      <Hourglass size={16} className="text-brand-accent" />
-                      <span className="text-[10px] font-black text-white uppercase tracking-widest">Duration: {duration} Hours</span>
+                <div className="flex justify-between items-center mb-2">
+                   <div className="flex items-center gap-1.5">
+                      <Hourglass size={14} className="text-brand-accent" />
+                      <span className="text-[9px] font-black text-white uppercase tracking-widest">Duration: {duration} Hours</span>
                    </div>
-                   <span className="text-[10px] font-bold text-white/20 uppercase">Max 6H</span>
+                   <span className="text-[8px] font-bold text-white/20 uppercase">Max 6H</span>
                 </div>
                 <input 
                   type="range" 
@@ -301,12 +358,12 @@ export function CreatePartyPage() {
              </div>
 
              <div>
-                <div className="flex justify-between items-center mb-4">
-                   <div className="flex items-center gap-2">
-                      <Globe size={16} className="text-brand-accent" />
-                      <span className="text-[10px] font-black text-white uppercase tracking-widest">Capacity: {guestLimit} People</span>
+                <div className="flex justify-between items-center mb-2">
+                   <div className="flex items-center gap-1.5">
+                      <Globe size={14} className="text-brand-accent" />
+                      <span className="text-[9px] font-black text-white uppercase tracking-widest">Capacity: {guestLimit} People</span>
                    </div>
-                   <span className="text-[10px] font-bold text-white/20 uppercase">Max 300</span>
+                   <span className="text-[8px] font-bold text-white/20 uppercase">Max 300</span>
                 </div>
                 <input 
                   type="range" 
@@ -322,25 +379,25 @@ export function CreatePartyPage() {
 
         {/* MAP PICKER */}
         <section>
-           <div className="flex items-center gap-3 mb-4">
+           <div className="flex items-center gap-2 mb-2">
              <div className="w-1 h-3 bg-brand-accent rounded-full" />
              <h3 className="text-[10px] font-black text-white/40 tracking-[0.2em] uppercase">Map Picker</h3>
           </div>
-          <div className="bg-[#11131F] border border-white/5 rounded-[32px] p-4 space-y-4">
-             <div className="h-[300px] w-full bg-[#f8f9fa] rounded-2xl overflow-hidden shadow-inner border border-white/5 z-0">
-               <MapContainer center={mapPosition ? [mapPosition.lat, mapPosition.lng] : [40.7128, -74.0060]} zoom={13} scrollWheelZoom={false} style={{ height: '100%', width: '100%' }}>
-                  <TileLayer
-                    url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-                  />
-                  <LocationMarker position={mapPosition} setPosition={setMapPosition} />
-               </MapContainer>
+          <div className="bg-[#11131F] border border-white/5 rounded-2xl p-3 space-y-3">
+             <div className="h-[180px] w-full bg-[#f8f9fa] rounded-xl overflow-hidden shadow-inner border border-white/5 z-0">
+                <MapContainer center={mapPosition ? [mapPosition.lat, mapPosition.lng] : [40.7128, -74.0060]} zoom={13} scrollWheelZoom={false} style={{ height: '100%', width: '100%' }}>
+                   <TileLayer
+                     url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+                   />
+                   <LocationMarker position={mapPosition} setPosition={setMapPosition} />
+                </MapContainer>
              </div>
-             <p className="text-[9px] font-bold text-white/20 uppercase text-center px-4 tracking-wider">Tap on the map to drop the marker at the exact party location</p>
+             <p className="text-[8px] font-bold text-white/20 uppercase text-center px-4 tracking-wider">Tap on the map to drop the marker at the exact party location</p>
              
-             <div className="space-y-4 pt-4 border-t border-white/5">
-                <div className="flex items-center gap-4 bg-white/5 rounded-2xl px-4 py-3 border border-white/5">
-                   <MapIcon size={18} className="text-brand-accent shrink-0" />
+             <div className="space-y-3 pt-3 border-t border-white/5">
+                <div className="flex items-center gap-3 bg-white/5 rounded-xl px-3 py-2 border border-white/5">
+                   <MapIcon size={16} className="text-brand-accent shrink-0" />
                    <div className="w-full">
                       <label className="text-[8px] font-bold text-white/20 uppercase tracking-widest block mb-0.5">City (Visible)</label>
                       <input 
@@ -353,8 +410,8 @@ export function CreatePartyPage() {
                    </div>
                 </div>
                 
-                <div className="flex items-center gap-4 bg-white/5 rounded-2xl px-4 py-3 border border-white/5">
-                   <Search size={18} className="text-brand-accent/60 shrink-0" />
+                <div className="flex items-center gap-3 bg-white/5 rounded-xl px-3 py-2 border border-white/5">
+                   <Search size={16} className="text-brand-accent/60 shrink-0" />
                    <div className="w-full">
                       <label className="text-[8px] font-bold text-white/20 uppercase tracking-widest block mb-0.5">Full Address (Private)</label>
                       <input 
@@ -372,26 +429,26 @@ export function CreatePartyPage() {
 
         {/* CROWDFUNDING */}
         <section>
-          <div className="flex items-center gap-3 mb-4">
+          <div className="flex items-center gap-2 mb-2">
              <div className="w-1 h-3 bg-brand-accent rounded-full" />
              <h3 className="text-[10px] font-black text-white/40 tracking-[0.2em] uppercase">Funding</h3>
           </div>
           <button 
             type="button"
             onClick={() => setShowWalletInput(!showWalletInput)}
-            className="w-full bg-[#11131F] border border-white/5 rounded-3xl p-6 flex items-center justify-between group active:scale-[0.98] transition-all"
+            className="w-full bg-[#11131F] border border-white/5 rounded-2xl p-4 flex items-center justify-between group active:scale-[0.98] transition-all"
           >
-             <div className="flex items-center gap-4">
-                <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center transition-colors", showWalletInput ? "bg-brand-accent text-[#0A0B14]" : "bg-white/5 text-white/20")}>
-                   <Wallet size={24} />
+             <div className="flex items-center gap-3">
+                <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center transition-colors", showWalletInput ? "bg-brand-accent text-[#0A0B14]" : "bg-white/5 text-white/20")}>
+                   <Wallet size={18} />
                 </div>
                 <div className="text-left">
-                   <p className="text-sm font-black text-white tracking-widest uppercase">CROWDFUND PARTY</p>
-                   <p className="text-[9px] font-bold text-white/20 uppercase">Request contributions from guests</p>
+                   <p className="text-xs font-black text-white tracking-widest uppercase">CROWDFUND PARTY</p>
+                   <p className="text-[8px] font-bold text-white/20 uppercase">Request contributions from guests</p>
                 </div>
              </div>
-             <div className={cn("w-6 h-6 rounded-full border border-white/10 flex items-center justify-center transition-all", showWalletInput && "bg-brand-accent border-brand-accent")}>
-                {showWalletInput && <Check size={12} className="text-[#0A0B14]" />}
+             <div className={cn("w-5 h-5 rounded-full border border-white/10 flex items-center justify-center transition-all", showWalletInput && "bg-brand-accent border-brand-accent")}>
+                {showWalletInput && <Check size={10} className="text-[#0A0B14]" />}
              </div>
           </button>
 
@@ -399,18 +456,18 @@ export function CreatePartyPage() {
             {showWalletInput && (
               <motion.div 
                 initial={{ opacity: 0, height: 0, marginTop: 0 }}
-                animate={{ opacity: 1, height: 'auto', marginTop: 16 }}
+                animate={{ opacity: 1, height: 'auto', marginTop: 12 }}
                 exit={{ opacity: 0, height: 0, marginTop: 0 }}
                 className="overflow-hidden"
               >
-                <div className="bg-brand-accent/5 border border-brand-accent/20 rounded-3xl p-6 flex items-center gap-4">
-                   <span className="text-2xl font-black text-brand-accent">$</span>
+                <div className="bg-brand-accent/5 border border-brand-accent/20 rounded-2xl p-4 flex items-center gap-3">
+                   <span className="text-lg font-black text-brand-accent">$</span>
                    <input 
                      type="number" 
                      placeholder="TARGET AMOUNT (E.G. 500)" 
                      value={crowdfundTarget || ''} 
                      onChange={e => setCrowdfundTarget(Number(e.target.value))}
-                     className="w-full bg-transparent border-none outline-none text-xl font-black text-white placeholder:text-brand-accent/20"
+                     className="w-full bg-transparent border-none outline-none text-base font-black text-white placeholder:text-brand-accent/20"
                    />
                 </div>
               </motion.div>
@@ -420,12 +477,12 @@ export function CreatePartyPage() {
 
         {/* PARTY TYPE */}
         <section>
-          <div className="flex items-center gap-3 mb-4">
+          <div className="flex items-center gap-2 mb-2">
              <div className="w-1 h-3 bg-brand-accent rounded-full" />
              <h3 className="text-[10px] font-black text-white/40 tracking-[0.2em] uppercase">Vibe Architecture</h3>
           </div>
           
-          <div className="bg-[#11131F] border border-white/5 rounded-[32px] p-6 space-y-6">
+          <div className="bg-[#11131F] border border-white/5 rounded-2xl p-4 space-y-4">
              <div className="grid grid-cols-2 gap-2">
                 {['RAVE', 'HOUSE PARTY', 'ROOFTOP', 'CLUB', 'DINNER', 'OTHER'].map(type => (
                    <button 
@@ -433,7 +490,7 @@ export function CreatePartyPage() {
                      type="button"
                      onClick={() => setPartyType(type)}
                      className={cn(
-                        "py-4 rounded-2xl text-[10px] font-black tracking-widest border transition-all uppercase",
+                        "py-2.5 rounded-xl text-[9px] font-black tracking-widest border transition-all uppercase",
                         partyType === type ? "bg-brand-accent border-brand-accent text-[#0A0B14] shadow-lg shadow-brand-accent/20" : "bg-white/5 border-white/5 text-white/30"
                      )}
                    >
@@ -448,80 +505,28 @@ export function CreatePartyPage() {
                  placeholder="CUSTOM VIBE TYPE" 
                  value={customType}
                  onChange={e => setCustomType(e.target.value)}
-                 className="w-full bg-white/5 border border-white/5 rounded-2xl px-6 py-4 text-sm font-bold text-white outline-none focus:border-brand-accent uppercase"
+                 className="w-full bg-white/5 border border-white/5 rounded-xl px-4 py-2.5 text-xs font-bold text-white outline-none focus:border-brand-accent uppercase"
                />
              )}
           </div>
         </section>
 
-        {/* GALLERY */}
-        <section>
-           <div className="flex items-center justify-between mb-4">
-             <div className="flex items-center gap-3">
-               <div className="w-1 h-3 bg-brand-accent rounded-full" />
-               <h3 className="text-[10px] font-black text-white/40 tracking-[0.2em] uppercase">Gallery</h3>
-             </div>
-             <span className="text-[10px] font-black text-white/20 tracking-widest">{partyPhotos.length}/16</span>
-           </div>
-           
-           <div className="grid grid-cols-4 gap-3">
-             {partyPhotos.map((photo, index) => (
-                <motion.div 
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  key={index} 
-                  className="relative aspect-[3/4] rounded-2xl overflow-hidden group shadow-xl"
-                >
-                  <img src={photo} alt="" className="w-full h-full object-cover" />
-                  <button 
-                    type="button"
-                    onClick={() => removePhoto(index)}
-                    className="absolute top-2 right-2 bg-black/60 backdrop-blur-md w-7 h-7 rounded-full flex items-center justify-center text-white p-1 hover:bg-red-500 transition-colors"
-                  >
-                    <X size={14} />
-                  </button>
-                </motion.div>
-             ))}
-             {partyPhotos.length < 16 && (
-                <button 
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="aspect-[3/4] bg-[#11131F] border-2 border-dashed border-white/5 rounded-2xl flex items-center justify-center flex-col gap-3 hover:bg-white/5 hover:border-brand-accent/20 transition-all group"
-                >
-                  <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <Camera size={24} className="text-white/20 group-hover:text-brand-accent transition-colors" />
-                  </div>
-                  <span className="text-[9px] font-black text-white/10 uppercase tracking-widest">Add Visuals</span>
-                </button>
-             )}
-           </div>
-           
-           <input 
-              type="file" 
-              ref={fileInputRef} 
-              accept="image/*" 
-              multiple
-              className="hidden" 
-              onChange={handleImageUpload} 
-           />
-        </section>
-
-         <div className="mt-12 flex justify-center w-full">
+         <div className="mt-6 flex justify-center w-full">
             <button 
               onClick={handlePublish} 
               disabled={isSubmitting}
               className={cn(
-                "w-full py-5 rounded-[24px] bg-gradient-to-r from-brand-primary to-brand-secondary text-white font-black text-xs tracking-[0.2em] shadow-2xl transition-all uppercase flex items-center justify-center gap-3",
-                isSubmitting ? "opacity-70 cursor-not-allowed" : "shadow-brand-primary/40 active:scale-95"
+                "w-full py-4 rounded-2xl bg-gradient-to-r from-brand-primary to-brand-secondary text-white font-black text-xs tracking-[0.2em] shadow-xl transition-all uppercase flex items-center justify-center gap-2",
+                isSubmitting ? "opacity-70 cursor-not-allowed" : "shadow-brand-primary/40 active:scale-95 hover:brightness-110"
               )}
             >
               {isSubmitting ? (
                 <>
-                  <Loader2 className="animate-spin" size={18} /> LAUNCHING...
+                  <Loader2 className="animate-spin" size={16} /> LAUNCHING...
                 </>
               ) : (
                 <>
-                  <Sparkles size={18} /> LAUNCH PARTY
+                  <Sparkles size={16} /> LAUNCH PARTY
                 </>
               )}
             </button>

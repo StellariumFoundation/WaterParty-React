@@ -25,3 +25,52 @@ body {
 * {
   font-family: "Neue Frutiger World", "Helvetica Neue", Arial, sans-serif !important;
 }
+
+/* --- Premium Compact Theme Standardization --- */
+
+/* Apply compact sizing to all text inputs, textareas, selects globally */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), 
+select, 
+textarea {
+  font-size: 11px !important;
+  padding-top: 0.55rem !important;
+  padding-bottom: 0.55rem !important;
+  border-radius: 0.75rem !important; /* rounded-xl (12px) */
+  outline: none !important;
+}
+
+input:not([type="range"])::placeholder,
+textarea::placeholder {
+  font-size: 9px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.05em !important;
+  opacity: 0.45 !important;
+  text-transform: uppercase !important;
+}
+
+/* Make standard full-width action buttons more compact and high-contrast */
+button {
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+/* Compact form headers & section headers */
+h1 {
+  font-size: 1.35rem !important;
+  letter-spacing: -0.02em !important;
+}
+h2 {
+  font-size: 1rem !important;
+  letter-spacing: -0.015em !important;
+}
+h3 {
+  font-size: 0.8rem !important;
+  letter-spacing: 0.05em !important;
+}
+
+/* Labels custom theme styling */
+label {
+  font-size: 8px !important;
+  letter-spacing: 0.15em !important;
+  font-weight: 900 !important;
+}

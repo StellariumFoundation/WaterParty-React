@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Briefcase, GraduationCap, User as UserIcon, Instagram, Twitter, Edit, Save, Camera, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useStore } from '../lib/Store';
 import { getAssetUrl } from '../lib/constants';
+import { compressImage } from '../lib/utils';
 
 export function ProfilePage() {
   const { user, logout, login, sendSocketMessage } = useStore();
@@ -73,16 +74,19 @@ export function ProfilePage() {
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    const remainingSlots = 8 - editData.ProfilePhotos.length;
+    const remainingSlots = 9 - editData.ProfilePhotos.length;
     const filesToProcess = files.slice(0, remainingSlots) as File[];
 
     filesToProcess.forEach(file => {
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setEditData(prev => ({
-          ...prev,
-          ProfilePhotos: [...prev.ProfilePhotos, reader.result as string]
-        }));
+      reader.onloadend = async () => {
+        if (reader.result) {
+          const compressed = await compressImage(reader.result as string);
+          setEditData(prev => ({
+            ...prev,
+            ProfilePhotos: [...prev.ProfilePhotos, compressed]
+          }));
+        }
       };
       reader.readAsDataURL(file);
     });
@@ -196,7 +200,7 @@ export function ProfilePage() {
                  <div>
                    <div className="flex items-center justify-between mb-2">
                      <label className="text-[10px] font-bold text-white/40 tracking-wider uppercase block">Manage Gallery</label>
-                     <span className="text-[10px] font-bold text-white/20">{editData.ProfilePhotos.length}/8</span>
+                     <span className="text-[10px] font-bold text-white/20">{editData.ProfilePhotos.length}/9</span>
                    </div>
                    <div className="grid grid-cols-4 gap-2">
                      {editData.ProfilePhotos.map((photo, index) => (
@@ -210,7 +214,7 @@ export function ProfilePage() {
                          </button>
                        </div>
                      ))}
-                     {editData.ProfilePhotos.length < 8 && (
+                     {editData.ProfilePhotos.length < 9 && (
                        <button 
                          onClick={() => fileInputRef.current?.click()}
                          className="aspect-[3/4] rounded-xl border border-dashed border-white/20 bg-[#11131F] flex items-center justify-center hover:bg-white/5 transition-colors"

@@ -26,6 +26,7 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
   const [registrations, setRegistrations] = useState<any[]>([]);
   const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
+  const messageQueueRef = useRef<{ event: string; payload: any }[]>([]);
   const navigate = useRef<ReturnType<typeof useNavigate> | null>(null);
   const navTrigger = useNavigate();
   
@@ -118,6 +119,14 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
           };
           send('GET_CHATS', {});
           send('GET_FEED', { Lat: coords?.lat || 0, Lon: coords?.lon || 0 });
+          
+          // Flush any messages queued during startup/connecting phase
+          while (messageQueueRef.current.length > 0) {
+             const queued = messageQueueRef.current.shift();
+             if (queued) {
+                send(queued.event, queued.payload);
+             }
+          }
        };
 
        ws.onmessage = (msg) => {
@@ -159,6 +168,12 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
       socketRef.current.send(JSON.stringify({
         Event: event, Payload: payload, Token: user.ID
       }));
+    } else {
+      // Queue the message to make sure it's sent as soon as the WebSocket connection is active!
+      const exists = messageQueueRef.current.some(m => m.event === event && JSON.stringify(m.payload) === JSON.stringify(payload));
+      if (!exists) {
+        messageQueueRef.current.push({ event, payload });
+      }
     }
   };
 

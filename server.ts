@@ -7,7 +7,8 @@ import bcrypt from "bcryptjs";
 import Database from "better-sqlite3";
 
 // Setup DB
-const db = new Database('./database.sqlite');
+const dbFile = process.env.DB_PATH || './database.sqlite';
+const db = new Database(dbFile);
 db.pragma('journal_mode = WAL');
 
 // Helper to check if a column exists and add it if missing
@@ -425,7 +426,7 @@ async function startServer() {
                     Token
                 );
                 const updatedUser = getUserByIdStmt.get(Token);
-                if(updatedUser) send('PROFILE_UPDATED', mapUser(updatedUser));
+                if(updatedUser) { send('PROFILE_UPDATED', mapUser(updatedUser)); broadcast('FEED_UPDATE', getEnrichedParties(db)); broadcastChats(); }
                 break;
              }
              case 'CREATE_DM': {

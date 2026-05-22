@@ -1,5 +1,5 @@
 {
-  "name": "Water PArty",
+  "name": "Water Party",
   "description": "A Tinder-like app for finding and matching with nearby parties.",
   "requestFramePermissions": ["geolocation"],
   "majorCapabilities": []
