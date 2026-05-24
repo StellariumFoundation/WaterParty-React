@@ -4,94 +4,30 @@ import { WebSocketServer } from "ws";
 import http from "http";
 import path from "path";
 import bcrypt from "bcryptjs";
-import Database from "better-sqlite3";
+import { createClient } from "@libsql/client";
 
-// Setup DB
-const dbFile = process.env.DB_PATH || './database.sqlite';
-const db = new Database(dbFile);
-db.pragma('journal_mode = WAL');
+// Setup Turso Database (libSQL)
+const dbUrl = process.env.TURSO_DATABASE_URL || "file:./database.sqlite";
+const dbToken = process.env.TURSO_AUTH_TOKEN || "";
+
+const db = createClient({
+  url: dbUrl,
+  authToken: dbToken,
+});
 
 // Helper to check if a column exists and add it if missing
-function ensureColumn(tableName: string, columnName: string, columnDef: string) {
+async function ensureColumn(tableName: string, columnName: string, columnDef: string) {
   try {
-    const info = db.prepare(`PRAGMA table_info(${tableName})`).all() as any[];
-    const exists = info.some(col => col.name === columnName);
+    const info = await db.execute(`PRAGMA table_info(${tableName})`);
+    const exists = info.rows.some((col: any) => col.name === columnName);
     if (!exists) {
-      db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnDef}`);
+      await db.execute(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnDef}`);
       console.log(`Migration: Added column ${columnName} to ${tableName}`);
     }
   } catch (e) {
     console.error(`Migration failed for ${tableName}.${columnName}`, e);
   }
 }
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    ID TEXT PRIMARY KEY,
-    RealName TEXT,
-    Email TEXT,
-    Password TEXT,
-    ProfilePhotos TEXT,
-    TrustScore REAL,
-    Thumbnail TEXT,
-    Bio TEXT,
-    Instagram TEXT,
-    Twitter TEXT,
-    Gender TEXT,
-    HeightCm REAL,
-    JobTitle TEXT,
-    Company TEXT,
-    School TEXT,
-    Degree TEXT
-  );
-`);
-
-// MIGRATIONS: Add new columns if they don't exist
-ensureColumn('users', 'HostedCount', 'INTEGER DEFAULT 0');
-ensureColumn('users', 'HostingRating', 'REAL DEFAULT 0');
-ensureColumn('users', 'Reach', 'INTEGER DEFAULT 0');
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS parties (
-    ID TEXT PRIMARY KEY,
-    HostID TEXT,
-    Title TEXT,
-    Description TEXT,
-    PartyPhotos TEXT,
-    StartTime TEXT,
-    DurationHours INTEGER,
-    Status TEXT,
-    Address TEXT,
-    City TEXT,
-    GeoLat REAL,
-    GeoLon REAL,
-    MaxCapacity INTEGER,
-    CurrentGuestCount INTEGER,
-    VibeTags TEXT,
-    Rules TEXT,
-    ChatRoomID TEXT,
-    Thumbnail TEXT,
-    CrowdfundTarget REAL,
-    CrowdfundCurrent REAL,
-    PartyType TEXT
-  );
-  CREATE TABLE IF NOT EXISTS chats (
-    ID TEXT PRIMARY KEY,
-    PartyID TEXT,
-    Title TEXT,
-    ImageUrl TEXT,
-    RecentMessages TEXT,
-    IsGroup INTEGER,
-    ParticipantIDs TEXT
-  );
-  CREATE TABLE IF NOT EXISTS registrations (
-    ID TEXT PRIMARY KEY,
-    PartyID TEXT,
-    UserID TEXT,
-    Status TEXT, -- 'PENDING', 'APPROVED'
-    Timestamp TEXT
-  );
-`);
 
 const parseJSON = (str: any, def: any = []) => { 
   try { 
@@ -116,37 +52,124 @@ const mapUser = (row: any) => ({ ...row, ProfilePhotos: parseJSON(row.ProfilePho
 const mapParty = (row: any) => ({ ...row, PartyPhotos: parseJSON(row.PartyPhotos), VibeTags: parseJSON(row.VibeTags), Rules: parseJSON(row.Rules) });
 const mapChat = (row: any) => ({ ...row, RecentMessages: parseJSON(row.RecentMessages), ParticipantIDs: parseJSON(row.ParticipantIDs), IsGroup: Boolean(row.IsGroup) });
 
-function getEnrichedParties(db: any) {
-  const parties = db.prepare('SELECT * FROM parties').all().map(mapParty);
-  return parties.map((p: any) => {
-    const hostData = db.prepare('SELECT RealName, Thumbnail, ProfilePhotos FROM users WHERE ID = ?').get(p.HostID) as any;
+async function getEnrichedParties() {
+  const result = await db.execute('SELECT * FROM parties');
+  const parties = result.rows.map((row: any) => mapParty(row));
+  const enriched = [];
+  for (const p of parties) {
+    const hostResult = await db.execute({
+      sql: 'SELECT RealName, Thumbnail, ProfilePhotos FROM users WHERE ID = ?',
+      args: [p.HostID]
+    });
+    const hostData = hostResult.rows[0] as any;
     if (hostData) {
        p.HostName = hostData.RealName || "";
        p.HostThumbnail = hostData.Thumbnail || parseJSON(hostData.ProfilePhotos)?.[0] || "";
     }
-    return p;
-  });
+    enriched.push(p);
+  }
+  return enriched;
 }
 
-function getEnrichedChats(db: any, userID: string) {
-  const allChats = db.prepare('SELECT * FROM chats').all();
-  return allChats.map((c: any) => {
-    const chat = mapChat(c);
+async function getEnrichedChats(userID: string) {
+  const result = await db.execute('SELECT * FROM chats');
+  const allChats = result.rows.map((row: any) => mapChat(row));
+  const enriched = [];
+  for (const chat of allChats) {
     if (!chat.IsGroup) {
       const otherID = chat.ParticipantIDs?.find((id: string) => id !== userID);
       if (otherID) {
-        const other = db.prepare('SELECT RealName, Thumbnail, ProfilePhotos FROM users WHERE ID = ?').get(otherID) as any;
+        const otherResult = await db.execute({
+          sql: 'SELECT RealName, Thumbnail, ProfilePhotos FROM users WHERE ID = ?',
+          args: [otherID]
+        });
+        const other = otherResult.rows[0] as any;
         if (other) {
            chat.Title = other.RealName || chat.Title;
            chat.ImageUrl = other.Thumbnail || parseJSON(other.ProfilePhotos)?.[0] || chat.ImageUrl;
         }
       }
     }
-    return chat;
-  }).filter((c: any) => c.ParticipantIDs?.includes(userID));
+    enriched.push(chat);
+  }
+  return enriched.filter((c: any) => c.ParticipantIDs?.includes(userID));
 }
 
 async function startServer() {
+  // DB Initialization Schema
+  try {
+    await db.executeMultiple(`
+      CREATE TABLE IF NOT EXISTS users (
+        ID TEXT PRIMARY KEY,
+        RealName TEXT,
+        Email TEXT,
+        Password TEXT,
+        ProfilePhotos TEXT,
+        TrustScore REAL,
+        Thumbnail TEXT,
+        Bio TEXT,
+        Instagram TEXT,
+        Twitter TEXT,
+        Gender TEXT,
+        HeightCm REAL,
+        JobTitle TEXT,
+        Company TEXT,
+        School TEXT,
+        Degree TEXT
+      );
+    `);
+
+    // MIGRATIONS: Add new columns if they don't exist
+    await ensureColumn('users', 'HostedCount', 'INTEGER DEFAULT 0');
+    await ensureColumn('users', 'HostingRating', 'REAL DEFAULT 0');
+    await ensureColumn('users', 'Reach', 'INTEGER DEFAULT 0');
+
+    await db.executeMultiple(`
+      CREATE TABLE IF NOT EXISTS parties (
+        ID TEXT PRIMARY KEY,
+        HostID TEXT,
+        Title TEXT,
+        Description TEXT,
+        PartyPhotos TEXT,
+        StartTime TEXT,
+        DurationHours INTEGER,
+        Status TEXT,
+        Address TEXT,
+        City TEXT,
+        GeoLat REAL,
+        GeoLon REAL,
+        MaxCapacity INTEGER,
+        CurrentGuestCount INTEGER,
+        VibeTags TEXT,
+        Rules TEXT,
+        ChatRoomID TEXT,
+        Thumbnail TEXT,
+        CrowdfundTarget REAL,
+        CrowdfundCurrent REAL,
+        PartyType TEXT
+      );
+      CREATE TABLE IF NOT EXISTS chats (
+        ID TEXT PRIMARY KEY,
+        PartyID TEXT,
+        Title TEXT,
+        ImageUrl TEXT,
+        RecentMessages TEXT,
+        IsGroup INTEGER,
+        ParticipantIDs TEXT
+      );
+      CREATE TABLE IF NOT EXISTS registrations (
+        ID TEXT PRIMARY KEY,
+        PartyID TEXT,
+        UserID TEXT,
+        Status TEXT,
+        Timestamp TEXT
+      );
+    `);
+    console.log("Database initialized successfully.");
+  } catch (err) {
+    console.error("Failed to initialize database schema:", err);
+  }
+
   const app = express();
   const PORT = 3000;
 
@@ -164,84 +187,123 @@ async function startServer() {
     next();
   });
 
-  // API Endpoints
-  const getUserStmt = db.prepare('SELECT * FROM users WHERE Email = ?');
-  const getUserByIdStmt = db.prepare('SELECT * FROM users WHERE ID = ?');
-  const insertUserStmt = db.prepare(
-    'INSERT INTO users (ID, RealName, Email, Password, ProfilePhotos, TrustScore, Thumbnail, Bio, Instagram, Twitter, Gender, HeightCm, JobTitle, Company, School, Degree, HostedCount, HostingRating, Reach) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  );
-
-  app.post(['/login', '/login/'], (req, res) => {
-    const { email, password } = req.body;
-    let userRow = getUserStmt.get(email) as any;
-    
-    if (!userRow || !bcrypt.compareSync(password, userRow.Password as string)) {
-       return res.status(401).json({ error: "Invalid username or password" });
-    }
-    const safeUser = { ...userRow };
-    delete safeUser.Password;
-    res.json(mapUser(safeUser));
-  });
-
-  app.post(['/register', '/register/'], (req, res) => {
-    const { user, password } = req.body;
-    
-    if (!password || password.length < 8) {
-       return res.status(400).json({ error: "Password must be at least 8 characters long" });
-    }
-    
-    const existingRow = getUserStmt.get(user.Email);
-    if (existingRow) {
-       return res.status(400).json({ error: "User already exists with this email" });
-    }
-
-    const newID = 'user_' + Date.now();
-    const hash = bcrypt.hashSync(password, 10);
-    
-    insertUserStmt.run(
-      newID, user.RealName, user.Email, hash, JSON.stringify(user.ProfilePhotos || []), 100, user.Thumbnail || '', user.Bio || '', user.Instagram || '', user.Twitter || '', user.Gender || '', user.HeightCm || 0, user.JobTitle || '', user.Company || '', user.School || '', user.Degree || '', 0, 0, 0
-    );
-    const userRow = getUserByIdStmt.get(newID);
-    const safeUser = { ...userRow } as any;
-    delete safeUser.Password;
-    res.json(mapUser(safeUser));
-  });
-
-  app.get(['/api/feed', '/api/feed/'], (req, res) => {
-    const { lat, lon } = req.query;
-    let mappedParties = getEnrichedParties(db);
-    
-    if (lat && lon) {
-      const Lat = parseFloat(lat as string);
-      const Lon = parseFloat(lon as string);
-      if (!isNaN(Lat) && !isNaN(Lon)) {
-        mappedParties.sort((a: any, b: any) => {
-          const distA = getDistance(Lat, Lon, a.GeoLat || 0, a.GeoLon || 0);
-          const distB = getDistance(Lat, Lon, b.GeoLat || 0, b.GeoLon || 0);
-          return distB - distA; // Descending
-        });
+  // REST API Endpoints
+  app.post(['/login', '/login/'], async (req, res) => {
+    try {
+      const { email, password } = req.body;
+      const result = await db.execute({
+        sql: 'SELECT * FROM users WHERE Email = ?',
+        args: [email]
+      });
+      const userRow = result.rows[0] as any;
+      
+      if (!userRow || !bcrypt.compareSync(password, userRow.Password as string)) {
+         return res.status(401).json({ error: "Invalid username or password" });
       }
+      const safeUser = { ...userRow };
+      delete safeUser.Password;
+      res.json(mapUser(safeUser));
+    } catch (e: any) {
+      console.error(e);
+      res.status(500).json({ error: e.message || "Internal server error" });
     }
-    res.json(mappedParties);
   });
 
-  app.get(['/api/chats', '/api/chats/'], (req, res) => {
-    const userId = req.headers['x-user-id'] || req.query.userId;
-    if (!userId) {
-      return res.status(400).json({ error: "Missing x-user-id header or userId query parameter" });
+  app.post(['/register', '/register/'], async (req, res) => {
+    try {
+      const { user, password } = req.body;
+      
+      if (!password || password.length < 8) {
+         return res.status(400).json({ error: "Password must be at least 8 characters long" });
+      }
+      
+      const existingResult = await db.execute({
+        sql: 'SELECT * FROM users WHERE Email = ?',
+        args: [user.Email]
+      });
+      const existingRow = existingResult.rows[0];
+      if (existingRow) {
+         return res.status(400).json({ error: "User already exists with this email" });
+      }
+
+      const newID = 'user_' + Date.now();
+      const hash = bcrypt.hashSync(password, 10);
+      
+      await db.execute({
+        sql: 'INSERT INTO users (ID, RealName, Email, Password, ProfilePhotos, TrustScore, Thumbnail, Bio, Instagram, Twitter, Gender, HeightCm, JobTitle, Company, School, Degree, HostedCount, HostingRating, Reach) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        args: [
+          newID, user.RealName, user.Email, hash, JSON.stringify(user.ProfilePhotos || []), 100, user.Thumbnail || '', user.Bio || '', user.Instagram || '', user.Twitter || '', user.Gender || '', user.HeightCm || 0, user.JobTitle || '', user.Company || '', user.School || '', user.Degree || '', 0, 0, 0
+        ]
+      });
+      const userResult = await db.execute({
+        sql: 'SELECT * FROM users WHERE ID = ?',
+        args: [newID]
+      });
+      const userRow = userResult.rows[0] as any;
+      const safeUser = { ...userRow };
+      delete safeUser.Password;
+      res.json(mapUser(safeUser));
+    } catch (e: any) {
+      console.error(e);
+      res.status(500).json({ error: e.message || "Internal server error" });
     }
-    res.json(getEnrichedChats(db, userId as string));
   });
 
-  app.get(['/api/users/:id', '/api/users/:id/'], (req, res) => {
-    const userRow = getUserByIdStmt.get(req.params.id) as any;
-    if (!userRow) return res.status(404).json({ error: "User not found" });
-    const safeUser = { ...userRow };
-    delete safeUser.Password;
-    res.json(mapUser(safeUser));
+  app.get(['/api/feed', '/api/feed/'], async (req, res) => {
+    try {
+      const { lat, lon } = req.query;
+      let mappedParties = await getEnrichedParties();
+      
+      if (lat && lon) {
+        const Lat = parseFloat(lat as string);
+        const Lon = parseFloat(lon as string);
+        if (!isNaN(Lat) && !isNaN(Lon)) {
+          mappedParties.sort((a: any, b: any) => {
+            const distA = getDistance(Lat, Lon, a.GeoLat || 0, a.GeoLon || 0);
+            const distB = getDistance(Lat, Lon, b.GeoLat || 0, b.GeoLon || 0);
+            return distB - distA; // Descending
+          });
+        }
+      }
+      res.json(mappedParties);
+    } catch (e: any) {
+      console.error(e);
+      res.status(500).json({ error: e.message || "Internal server error" });
+    }
   });
 
-  // Vite middleware for development (Keep this, but we'll isolate it)
+  app.get(['/api/chats', '/api/chats/'], async (req, res) => {
+    try {
+      const userId = req.headers['x-user-id'] || req.query.userId;
+      if (!userId) {
+        return res.status(400).json({ error: "Missing x-user-id header or userId query parameter" });
+      }
+      const chats = await getEnrichedChats(userId as string);
+      res.json(chats);
+    } catch (e: any) {
+      console.error(e);
+      res.status(500).json({ error: e.message || "Internal server error" });
+    }
+  });
+
+  app.get(['/api/users/:id', '/api/users/:id/'], async (req, res) => {
+    try {
+      const result = await db.execute({
+        sql: 'SELECT * FROM users WHERE ID = ?',
+        args: [req.params.id]
+      });
+      const userRow = result.rows[0] as any;
+      if (!userRow) return res.status(404).json({ error: "User not found" });
+      const safeUser = { ...userRow };
+      delete safeUser.Password;
+      res.json(mapUser(safeUser));
+    } catch (e: any) {
+      console.error(e);
+      res.status(500).json({ error: e.message || "Internal server error" });
+    }
+  });
+
+  // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -249,7 +311,16 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    // API-only mode: No static file serving
+    // Production statics handling (if full-stack is packaged)
+    const distPath = path.join(process.cwd(), 'dist');
+    app.use(express.static(distPath));
+    app.get('*', (req, res, next) => {
+      // If it starts with an API path but missed, fall through
+      if (req.path.startsWith('/api') || req.path === '/login' || req.path === '/register') {
+        return next();
+      }
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
   }
 
   // Final catch-all for unknown API routes - return JSON 404, not HTML
@@ -263,20 +334,8 @@ async function startServer() {
   // WebSocket Server
   const wss = new WebSocketServer({ server, path: '/ws' });
 
-  const getChatsStmt = db.prepare('SELECT * FROM chats');
-  const insertPartyStmt = db.prepare(`
-    INSERT INTO parties (ID, HostID, Title, Description, PartyPhotos, StartTime, DurationHours, Status, Address, City, GeoLat, GeoLon, MaxCapacity, CurrentGuestCount, VibeTags, Rules, ChatRoomID, Thumbnail, CrowdfundTarget, CrowdfundCurrent, PartyType) 
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-  const insertChatWSRoomStmt = db.prepare(`
-     INSERT INTO chats (ID, PartyID, Title, ImageUrl, RecentMessages, IsGroup, ParticipantIDs) 
-     VALUES (?, ?, ?, ?, ?, ?, ?)
-  `);
-  const getPartyByIdStmt = db.prepare('SELECT * FROM parties WHERE ID = ?');
-  const updateUserStmt = db.prepare('UPDATE users SET RealName = ?, Bio = ?, Thumbnail = ?, ProfilePhotos = ?, Instagram = ?, Twitter = ?, Gender = ?, HeightCm = ?, JobTitle = ?, Company = ?, School = ?, Degree = ? WHERE ID = ?');
-
   wss.on('connection', (ws: any, req) => {
-    ws.on('message', (message: any) => {
+    ws.on('message', async (message: any) => {
        try {
           const { Event, Payload, Token } = JSON.parse(message.toString());
           if (Token) ws.userID = Token;
@@ -296,21 +355,27 @@ async function startServer() {
           };
 
           const broadcastChats = () => {
-             wss.clients.forEach((client: any) => {
+             wss.clients.forEach(async (client: any) => {
                 if (client.readyState === 1 && client.userID) {
-                   client.send(JSON.stringify({ Event: 'CHATS_LIST', Payload: getEnrichedChats(db, client.userID) }));
+                   try {
+                     const enriched = await getEnrichedChats(client.userID);
+                     client.send(JSON.stringify({ Event: 'CHATS_LIST', Payload: enriched }));
+                   } catch (e) {
+                     console.error("Failed to broadcast chats to client", client.userID, e);
+                   }
                 }
              });
           };
 
           switch (Event) {
              case 'GET_CHATS': {
-               send('CHATS_LIST', getEnrichedChats(db, Token));
+               const enriched = await getEnrichedChats(Token);
+               send('CHATS_LIST', enriched);
                break;
              }
              case 'GET_FEED': {
                const { Lat, Lon } = Payload || {};
-               let mappedParties = getEnrichedParties(db);
+               let mappedParties = await getEnrichedParties();
                
                if (typeof Lat === 'number' && typeof Lon === 'number') {
                  mappedParties.sort((a: any, b: any) => {
@@ -327,11 +392,16 @@ async function startServer() {
                 const { PartyID, Direction } = Payload;
                 if (Direction === 'right') {
                    const regID = `reg_${Date.now()}_${Token}`;
-                   const existing = db.prepare('SELECT * FROM registrations WHERE PartyID = ? AND UserID = ?').get(PartyID, Token);
+                   const existingResult = await db.execute({
+                     sql: 'SELECT * FROM registrations WHERE PartyID = ? AND UserID = ?',
+                     args: [PartyID, Token]
+                   });
+                   const existing = existingResult.rows[0];
                    if (!existing) {
-                      db.prepare('INSERT INTO registrations (ID, PartyID, UserID, Status, Timestamp) VALUES (?, ?, ?, ?, ?)').run(
-                         regID, PartyID, Token, 'PENDING', new Date().toISOString()
-                      );
+                      await db.execute({
+                        sql: 'INSERT INTO registrations (ID, PartyID, UserID, Status, Timestamp) VALUES (?, ?, ?, ?, ?)',
+                        args: [regID, PartyID, Token, 'PENDING', new Date().toISOString()]
+                      });
                    }
                 }
                 break;
@@ -371,46 +441,61 @@ async function startServer() {
                const pID = 'party_' + Date.now();
                const imgUrl = Payload.PartyPhotos?.[0] || Payload.Thumbnail || '';
                
-               insertPartyStmt.run(
-                 pID, 
-                 Token, 
-                 Payload.Title, 
-                 Payload.Description, 
-                 JSON.stringify(Payload.PartyPhotos || []), 
-                 Payload.StartTime, 
-                 Payload.DurationHours, 
-                 'OPEN', 
-                 Payload.Address, 
-                 Payload.City, 
-                 Payload.GeoLat || 0, 
-                 Payload.GeoLon || 0, 
-                 Payload.MaxCapacity, 
-                 1, 
-                 JSON.stringify(Payload.VibeTags || []), 
-                 JSON.stringify(Payload.Rules || []), 
-                 Payload.ChatRoomID, 
-                 imgUrl,
-                 Payload.CrowdfundTarget || 0,
-                 0, // CrowdfundCurrent
-                 Payload.PartyType || 'OTHER'
-               );
+               await db.execute({
+                 sql: `INSERT INTO parties (ID, HostID, Title, Description, PartyPhotos, StartTime, DurationHours, Status, Address, City, GeoLat, GeoLon, MaxCapacity, CurrentGuestCount, VibeTags, Rules, ChatRoomID, Thumbnail, CrowdfundTarget, CrowdfundCurrent, PartyType) 
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                 args: [
+                   pID, 
+                   Token, 
+                   Payload.Title, 
+                   Payload.Description, 
+                   JSON.stringify(Payload.PartyPhotos || []), 
+                   Payload.StartTime, 
+                   Payload.DurationHours, 
+                   'OPEN', 
+                   Payload.Address, 
+                   Payload.City, 
+                   Payload.GeoLat || 0, 
+                   Payload.GeoLon || 0, 
+                   Payload.MaxCapacity, 
+                   1, 
+                   JSON.stringify(Payload.VibeTags || []), 
+                   JSON.stringify(Payload.Rules || []), 
+                   Payload.ChatRoomID, 
+                   imgUrl,
+                   Payload.CrowdfundTarget || 0,
+                   0, // CrowdfundCurrent
+                   Payload.PartyType || 'OTHER'
+                 ]
+               });
                
-               insertChatWSRoomStmt.run(
-                 Payload.ChatRoomID, pID, Payload.Title, imgUrl, JSON.stringify([]), 1, JSON.stringify([Token])
-               );
+               await db.execute({
+                 sql: `INSERT INTO chats (ID, PartyID, Title, ImageUrl, RecentMessages, IsGroup, ParticipantIDs) 
+                       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                 args: [
+                   Payload.ChatRoomID, pID, Payload.Title, imgUrl, JSON.stringify([]), 1, JSON.stringify([Token])
+                 ]
+               });
                
-               const newlyCreatedParty = getPartyByIdStmt.get(pID);
+               const newlyCreatedResult = await db.execute({
+                 sql: 'SELECT * FROM parties WHERE ID = ?',
+                 args: [pID]
+               });
+               const newlyCreatedParty = newlyCreatedResult.rows[0];
                if (newlyCreatedParty) send('PARTY_CREATED', mapParty(newlyCreatedParty));
 
-               const updatedParties = getEnrichedParties(db);
+               const updatedParties = await getEnrichedParties();
                broadcast('FEED_UPDATE', updatedParties);
 
-               const updatedChats = getChatsStmt.all() as any[];
-               send('CHATS_LIST', updatedChats.map(mapChat).filter((c: any) => c.ParticipantIDs?.includes(Token)));
+               const chatsResult = await db.execute('SELECT * FROM chats');
+               const updatedChats = chatsResult.rows.map(row => mapChat(row as any));
+               send('CHATS_LIST', updatedChats.filter((c: any) => c.ParticipantIDs?.includes(Token)));
                break;
              }
              case 'UPDATE_PROFILE': {
-                updateUserStmt.run(
+                await db.execute({
+                  sql: 'UPDATE users SET RealName = ?, Bio = ?, Thumbnail = ?, ProfilePhotos = ?, Instagram = ?, Twitter = ?, Gender = ?, HeightCm = ?, JobTitle = ?, Company = ?, School = ?, Degree = ? WHERE ID = ?',
+                  args: [
                     Payload.RealName, 
                     Payload.Bio, 
                     Payload.Thumbnail, 
@@ -424,17 +509,36 @@ async function startServer() {
                     Payload.School || '',
                     Payload.Degree || '',
                     Token
-                );
-                const updatedUser = getUserByIdStmt.get(Token);
-                if(updatedUser) { send('PROFILE_UPDATED', mapUser(updatedUser)); broadcast('FEED_UPDATE', getEnrichedParties(db)); broadcastChats(); }
+                  ]
+                });
+                const updatedUserResult = await db.execute({
+                  sql: 'SELECT * FROM users WHERE ID = ?',
+                  args: [Token]
+                });
+                const updatedUser = updatedUserResult.rows[0];
+                if (updatedUser) { 
+                   send('PROFILE_UPDATED', mapUser(updatedUser)); 
+                   const enrichedParties = await getEnrichedParties();
+                   broadcast('FEED_UPDATE', enrichedParties); 
+                   broadcastChats(); 
+                }
                 break;
              }
              case 'CREATE_DM': {
                 const { TargetUserID } = Payload;
-                const me = getUserByIdStmt.get(Token) as any;
-                const other = getUserByIdStmt.get(TargetUserID) as any;
+                const meResult = await db.execute({
+                  sql: 'SELECT * FROM users WHERE ID = ?',
+                  args: [Token]
+                });
+                const me = meResult.rows[0] as any;
+                const otherResult = await db.execute({
+                  sql: 'SELECT * FROM users WHERE ID = ?',
+                  args: [TargetUserID]
+                });
+                const other = otherResult.rows[0] as any;
                 if (me && other) {
-                   const allChats = getChatsStmt.all().map(mapChat) as any[];
+                   const allChatsResult = await db.execute('SELECT * FROM chats');
+                   const allChats = allChatsResult.rows.map(row => mapChat(row as any));
                    const existing = allChats.find((c: any) => c.IsGroup === false && c.ParticipantIDs.includes(Token) && c.ParticipantIDs.includes(TargetUserID));
                    
                    let chatID;
@@ -442,11 +546,14 @@ async function startServer() {
                       chatID = existing.ID;
                    } else {
                       chatID = 'dm_' + Date.now() + '_' + Token + '_' + TargetUserID;
-                      insertChatWSRoomStmt.run(
-                        chatID, 'DM', `${me.RealName} & ${other.RealName}`, '', JSON.stringify([]), 0, JSON.stringify([Token, TargetUserID])
-                      );
+                      await db.execute({
+                        sql: `INSERT INTO chats (ID, PartyID, Title, ImageUrl, RecentMessages, IsGroup, ParticipantIDs) 
+                              VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                        args: [
+                          chatID, 'DM', `${me.RealName} & ${other.RealName}`, '', JSON.stringify([]), 0, JSON.stringify([Token, TargetUserID])
+                        ]
+                      });
                    }
-                   const updatedChats = getChatsStmt.all().map(mapChat) as any[];
                    broadcastChats();
                    send('DM_CREATED', { ChatID: chatID });
                 }
@@ -454,7 +561,11 @@ async function startServer() {
              }
              case 'SEND_MESSAGE': {
                 const { ChatID, Content } = Payload;
-                const chatRow = db.prepare('SELECT * FROM chats WHERE ID = ?').get(ChatID);
+                const chatResult = await db.execute({
+                  sql: 'SELECT * FROM chats WHERE ID = ?',
+                  args: [ChatID]
+                });
+                const chatRow = chatResult.rows[0];
                 if (chatRow) {
                    const chat = mapChat(chatRow);
                    const newMessage = {
@@ -463,59 +574,99 @@ async function startServer() {
                       Content
                    };
                    const updatedMessages = [...(chat.RecentMessages || []), newMessage];
-                   db.prepare('UPDATE chats SET RecentMessages = ? WHERE ID = ?').run(
-                      JSON.stringify(updatedMessages), ChatID
-                   );
+                   await db.execute({
+                     sql: 'UPDATE chats SET RecentMessages = ? WHERE ID = ?',
+                     args: [JSON.stringify(updatedMessages), ChatID]
+                   });
                    
-                   const refreshedChats = db.prepare('SELECT * FROM chats').all().map(mapChat);
-                   broadcast('CHATS_LIST', refreshedChats);
+                   broadcastChats();
                 }
                 break;
              }
              case 'GET_REGISTRATIONS': {
                 const { PartyID } = Payload;
-                const regs = db.prepare('SELECT registrations.*, users.RealName, users.Thumbnail as UserThumbnail, users.ProfilePhotos as UserProfilePhotos FROM registrations JOIN users ON registrations.UserID = users.ID WHERE PartyID = ?').all(PartyID);
+                const regsResult = await db.execute({
+                  sql: 'SELECT registrations.*, users.RealName, users.Thumbnail as UserThumbnail, users.ProfilePhotos as UserProfilePhotos FROM registrations JOIN users ON registrations.UserID = users.ID WHERE PartyID = ?',
+                  args: [PartyID]
+                });
+                const regs = regsResult.rows;
                 send('REGISTRATIONS_LIST', regs.map((r: any) => ({ ...r, UserProfilePhotos: parseJSON(r.UserProfilePhotos) })));
                 break;
              }
              case 'APPROVE_JOIN_REQUEST': {
                 const { RegistrationID } = Payload;
-                const reg = db.prepare('SELECT * FROM registrations WHERE ID = ?').get(RegistrationID) as any;
+                const regResult = await db.execute({
+                  sql: 'SELECT * FROM registrations WHERE ID = ?',
+                  args: [RegistrationID]
+                });
+                const reg = regResult.rows[0] as any;
                 if (reg && reg.Status === 'PENDING') {
-                   db.prepare('UPDATE registrations SET Status = ? WHERE ID = ?').run('APPROVED', RegistrationID);
-                   const party = db.prepare('SELECT * FROM parties WHERE ID = ?').get(reg.PartyID) as any;
+                   await db.execute({
+                     sql: 'UPDATE registrations SET Status = ? WHERE ID = ?',
+                     args: ['APPROVED', RegistrationID]
+                   });
+                   const partyResult = await db.execute({
+                     sql: 'SELECT * FROM parties WHERE ID = ?',
+                     args: [reg.PartyID]
+                   });
+                   const party = partyResult.rows[0] as any;
                    if (party) {
-                      const chat = db.prepare('SELECT * FROM chats WHERE ID = ?').get(party.ChatRoomID) as any;
+                      const chatResult = await db.execute({
+                        sql: 'SELECT * FROM chats WHERE ID = ?',
+                        args: [party.ChatRoomID]
+                      });
+                      const chat = chatResult.rows[0] as any;
                       if (chat) {
                          const pIDs = JSON.parse(chat.ParticipantIDs);
                          if (!pIDs.includes(reg.UserID)) {
                             pIDs.push(reg.UserID);
-                            db.prepare('UPDATE chats SET ParticipantIDs = ? WHERE ID = ?').run(JSON.stringify(pIDs), party.ChatRoomID);
-                            db.prepare('UPDATE parties SET CurrentGuestCount = CurrentGuestCount + 1 WHERE ID = ?').run(reg.PartyID);
+                            await db.execute({
+                              sql: 'UPDATE chats SET ParticipantIDs = ? WHERE ID = ?',
+                              args: [JSON.stringify(pIDs), party.ChatRoomID]
+                            });
+                            await db.execute({
+                              sql: 'UPDATE parties SET CurrentGuestCount = CurrentGuestCount + 1 WHERE ID = ?',
+                              args: [reg.PartyID]
+                            });
                          }
                       }
                    }
-                   const regs = db.prepare('SELECT registrations.*, users.RealName, users.Thumbnail as UserThumbnail, users.ProfilePhotos as UserProfilePhotos FROM registrations JOIN users ON registrations.UserID = users.ID WHERE PartyID = ?').all(reg.PartyID);
+                   const regsResult = await db.execute({
+                     sql: 'SELECT registrations.*, users.RealName, users.Thumbnail as UserThumbnail, users.ProfilePhotos as UserProfilePhotos FROM registrations JOIN users ON registrations.UserID = users.ID WHERE PartyID = ?',
+                     args: [reg.PartyID]
+                   });
+                   const regs = regsResult.rows;
                    send('REGISTRATIONS_LIST', regs.map((r: any) => ({ ...r, UserProfilePhotos: parseJSON(r.UserProfilePhotos) })));
-                   const refreshedParties = getEnrichedParties(db);
+                   const refreshedParties = await getEnrichedParties();
                    broadcast('FEED_UPDATE', refreshedParties);
-                   const refreshedChats = db.prepare('SELECT * FROM chats').all().map(mapChat);
-                   broadcast('CHATS_LIST', refreshedChats);
+                   broadcastChats();
                 }
                 break;
              }
              case 'DELETE_PARTY': {
                 const { PartyID } = Payload;
-                const party = db.prepare('SELECT * FROM parties WHERE ID = ?').get(PartyID) as any;
+                const partyResult = await db.execute({
+                  sql: 'SELECT * FROM parties WHERE ID = ?',
+                  args: [PartyID]
+                });
+                const party = partyResult.rows[0] as any;
                 if (party && party.HostID === Token) {
-                   db.prepare('DELETE FROM parties WHERE ID = ?').run(PartyID);
-                   db.prepare('DELETE FROM chats WHERE ID = ?').run(party.ChatRoomID);
-                   db.prepare('DELETE FROM registrations WHERE PartyID = ?').run(PartyID);
+                   await db.execute({
+                     sql: 'DELETE FROM parties WHERE ID = ?',
+                     args: [PartyID]
+                   });
+                   await db.execute({
+                     sql: 'DELETE FROM chats WHERE ID = ?',
+                     args: [party.ChatRoomID]
+                   });
+                   await db.execute({
+                     sql: 'DELETE FROM registrations WHERE PartyID = ?',
+                     args: [PartyID]
+                   });
                    
-                   const refreshedParties = getEnrichedParties(db);
+                   const refreshedParties = await getEnrichedParties();
                    broadcast('FEED_UPDATE', refreshedParties);
-                   const refreshedChats = db.prepare('SELECT * FROM chats').all().map(mapChat);
-                   broadcast('CHATS_LIST', refreshedChats);
+                   broadcastChats();
                 }
                 break;
              }
@@ -527,7 +678,7 @@ async function startServer() {
   });
 
   server.listen(PORT, "0.0.0.0", () => {
-    console.log(`Express server + SQLite WS running on port ${PORT}`);
+    console.log(`Express server + Turso libSQL WS running on port ${PORT}`);
   });
 }
 
