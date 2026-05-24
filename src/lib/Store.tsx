@@ -15,6 +15,7 @@ interface StoreContextType {
   sendSocketMessage: (event: string, payload: any) => void;
   removeFromFeed: (id: string) => void;
   refreshLocation: (onSuccess?: (coords: { lat: number; lon: number }) => void) => void;
+  addLocalChat: (chat: ChatRoom) => void;
 }
 
 const StoreContext = createContext<StoreContextType | null>(null);
@@ -196,8 +197,15 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
      setFeed(prev => prev.filter(p => p.ID !== id));
   }
 
+  const addLocalChat = (chat: ChatRoom) => {
+    setChats(prev => {
+      if (prev.some(c => c.ID === chat.ID)) return prev;
+      return [...prev, chat];
+    });
+  };
+
   return (
-    <StoreContext.Provider value={{ user, feed, chats, registrations, coords, login, logout, sendSocketMessage, removeFromFeed, refreshLocation }}>
+    <StoreContext.Provider value={{ user, feed, chats, registrations, coords, login, logout, sendSocketMessage, removeFromFeed, refreshLocation, addLocalChat }}>
       {children}
     </StoreContext.Provider>
   )

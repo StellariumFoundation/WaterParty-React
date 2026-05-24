@@ -332,7 +332,7 @@ export function ProfilePage() {
               </div>
             ) : (
               <>
-                 <h1 className="text-4xl font-bold text-white mb-6 tracking-tight">{user.RealName}</h1>
+                 <h1 className="text-4xl font-bold text-white mb-6 tracking-tight pt-[29px]">{user.RealName}</h1>
                  
                  <h3 className="text-[10px] font-bold text-white/40 tracking-wider mb-2 uppercase">About Me</h3>
                  <p className="text-sm text-white/80 leading-relaxed">

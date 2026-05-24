@@ -172,6 +172,7 @@ async function startServer() {
 
   const app = express();
   const PORT = Number(process.env.PORT) || 3000;
+  let broadcastChatsGlobal: () => void = () => {};
 
   // CORS & Request logging
   app.use(express.json({ limit: '10mb' }));
@@ -286,6 +287,60 @@ async function startServer() {
     }
   });
 
+  app.post(['/api/chats/dm', '/api/chats/dm/'], async (req, res) => {
+    try {
+      const { sourceUserId, targetUserId } = req.body;
+      if (!sourceUserId || !targetUserId) {
+        return res.status(400).json({ error: "Missing sourceUserId or targetUserId" });
+      }
+
+      const meResult = await db.execute({
+        sql: 'SELECT * FROM users WHERE ID = ?',
+        args: [sourceUserId]
+      });
+      const me = meResult.rows[0] as any;
+
+      const otherResult = await db.execute({
+        sql: 'SELECT * FROM users WHERE ID = ?',
+        args: [targetUserId]
+      });
+      const other = otherResult.rows[0] as any;
+
+      if (!me || !other) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const allChatsResult = await db.execute('SELECT * FROM chats');
+      const allChats = allChatsResult.rows.map(row => mapChat(row as any));
+      const existing = allChats.find((c: any) => 
+        c.IsGroup === false && 
+        c.ParticipantIDs.includes(sourceUserId) && 
+        c.ParticipantIDs.includes(targetUserId)
+      );
+
+      let chatID;
+      if (existing) {
+        chatID = existing.ID;
+      } else {
+        chatID = 'dm_' + Date.now() + '_' + sourceUserId + '_' + targetUserId;
+        await db.execute({
+          sql: `INSERT INTO chats (ID, PartyID, Title, ImageUrl, RecentMessages, IsGroup, ParticipantIDs) 
+                VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          args: [
+            chatID, 'DM', `${me.RealName} & ${other.RealName}`, '', JSON.stringify([]), 0, JSON.stringify([sourceUserId, targetUserId])
+          ]
+        });
+      }
+
+      broadcastChatsGlobal();
+
+      res.json({ ChatID: chatID });
+    } catch (e: any) {
+      console.error(e);
+      res.status(500).json({ error: e.message || "Internal server error" });
+    }
+  });
+
   app.get(['/api/users/:id', '/api/users/:id/'], async (req, res) => {
     try {
       const result = await db.execute({
@@ -333,6 +388,19 @@ async function startServer() {
   
   // WebSocket Server
   const wss = new WebSocketServer({ server, path: '/ws' });
+
+  broadcastChatsGlobal = () => {
+    wss.clients.forEach(async (client: any) => {
+       if (client.readyState === 1 && client.userID) {
+          try {
+            const enriched = await getEnrichedChats(client.userID);
+            client.send(JSON.stringify({ Event: 'CHATS_LIST', Payload: enriched }));
+          } catch (e) {
+            console.error("Failed to broadcast chats to client", client.userID, e);
+          }
+       }
+    });
+  };
 
   wss.on('connection', (ws: any, req) => {
     ws.on('message', async (message: any) => {
