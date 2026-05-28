@@ -81,7 +81,7 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
         }).catch(() => {});
 
       // 3. Instantly fetch latest parties feed
-      fetch(`${API_BASE}/api/feed`)
+      fetch(`${API_BASE}/api/feed?userId=${userId}`)
         .then(res => res.ok ? res.json() : null)
         .then(data => {
           if (data && !data.error) {
@@ -199,7 +199,9 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
 
   const addLocalChat = (chat: ChatRoom) => {
     setChats(prev => {
-      if (prev.some(c => c.ID === chat.ID)) return prev;
+      if (prev.some(c => c.ID === chat.ID)) {
+        return prev.map(c => c.ID === chat.ID ? chat : c);
+      }
       return [...prev, chat];
     });
   };

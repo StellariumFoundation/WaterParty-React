@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { BottomNav } from './components/BottomNav';
 import { SwipePage } from './pages/SwipePage';
 import { MessagesPage } from './pages/MessagesPage';
@@ -12,17 +12,22 @@ import { ChatRoomPage } from './pages/ChatRoomPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { StoreProvider, useStore } from './lib/Store';
 import { AuthPage } from './pages/AuthPage';
+import { getAssetUrl } from './lib/constants';
 
 function MainApp() {
+  const location = useLocation();
   const { user } = useStore();
   
   if (!user) return <AuthPage />;
 
   return (
-    <div className="bg-[#0F0F13] min-h-[100dvh] flex justify-center w-full font-sans text-white selection:bg-[#00D2FF]/30">
-      <div className="w-full max-w-md h-[100dvh] bg-gradient-to-b from-[#1A1A24] to-[#0F0F13] relative flex flex-col xl:shadow-[0_40px_100px_rgba(0,0,0,0.6)] xl:rounded-[40px] xl:my-4 xl:h-[calc(100vh-2rem)] overflow-hidden xl:border-8 xl:border-[#2A2A35]">
+    <div className="bg-[#090A10] h-[100dvh] w-full font-sans text-white flex flex-col overflow-hidden selection:bg-[#00D2FF]/30">
+      
+      {/* Main Panel */}
+      <div className="flex-1 relative flex flex-col min-w-0 h-full overflow-hidden">
         
-        <main className="flex-1 relative overflow-hidden">
+        {/* Core Screen Space with custom responsive constraints */}
+        <main className="flex-1 relative overflow-y-auto overflow-x-hidden bg-gradient-to-b from-[#121320] to-[#0A0B14]">
           <Routes>
             <Route path="/" element={<SwipePage />} />
             <Route path="/messages" element={<MessagesPage />} />
@@ -32,7 +37,12 @@ function MainApp() {
           </Routes>
         </main>
         
-        <BottomNav />
+        {/* Bottom Navigation */}
+        {!location.pathname.startsWith('/chat/') && (
+          <div className="absolute bottom-3 left-3 right-3 h-[56px] z-40">
+            <BottomNav />
+          </div>
+        )}
         
       </div>
     </div>

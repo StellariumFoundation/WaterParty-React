@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, ChangeEvent } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   Send,
@@ -16,9 +16,11 @@ import {
   User as UserIcon,
   Briefcase,
   GraduationCap,
+  Image as ImageIcon,
+  Download,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { cn } from "../lib/utils";
+import { cn, compressImage } from "../lib/utils";
 import { useStore } from "../lib/Store";
 import { getAssetUrl, API_BASE } from "../lib/constants";
 
@@ -29,12 +31,26 @@ export function ChatRoomPage() {
   const navigate = useNavigate();
   const { chats, user, sendSocketMessage, feed, registrations, addLocalChat } = useStore();
   const [message, setMessage] = useState("");
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [showInfo, setShowInfo] = useState(false);
   const [showManagement, setShowManagement] = useState(false);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
   const [otherUser, setOtherUser] = useState<any | null>(null);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+  const [lightboxVideo, setLightboxVideo] = useState<string | null>(null);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportReason, setReportReason] = useState("");
+  const [reportDetails, setReportDetails] = useState("");
+  const [reportingInFlight, setReportingInFlight] = useState(false);
+  const [reportSuccess, setReportSuccess] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [reportTargetUser, setReportTargetUser] = useState<any | null>(null);
 
   const [localChat, setLocalChat] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
@@ -132,13 +148,156 @@ export function ChatRoomPage() {
 
   const handleSend = (e?: any) => {
     e?.preventDefault();
-    if (!message.trim()) return;
+    if (!message.trim() && !selectedImage && !selectedVideo) return;
+
+    const newMessageContent = message;
+    const msgImage = selectedImage || undefined;
+    const msgVideo = selectedVideo || undefined;
+
+    // Optimistic Update
+    if (chat && user) {
+       addLocalChat({
+          ...chat,
+          RecentMessages: [
+             ...(chat.RecentMessages || []),
+             {
+                SenderID: user.ID,
+                Content: newMessageContent,
+                Timestamp: new Date().toISOString(),
+                ImageUrl: msgImage,
+                VideoUrl: msgVideo
+             }
+          ]
+       });
+    }
 
     sendSocketMessage("SEND_MESSAGE", {
       ChatID: chat.ID,
       Content: message,
+      ImageUrl: selectedImage || undefined,
+      VideoUrl: selectedVideo || undefined,
     });
     setMessage("");
+    setSelectedImage(null);
+    setSelectedVideo(null);
+    setUploadError(null);
+  };
+
+  const handleLocalImageUpload = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const MAX_SIZE_MB = 20;
+    const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
+
+    if (file.size > MAX_SIZE_BYTES) {
+      setUploadError(`File too large. Maximum size is ${MAX_SIZE_MB}MB.`);
+      setSelectedImage(null);
+      setSelectedVideo(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    setUploadError(null);
+    setUploadingImage(true);
+
+    const isVideo = file.type.startsWith("video/") || 
+                    file.name.endsWith(".mp4") || 
+                    file.name.endsWith(".webm") || 
+                    file.name.endsWith(".mov");
+
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      if (reader.result) {
+        try {
+          if (isVideo) {
+            setSelectedVideo(reader.result as string);
+            setSelectedImage(null);
+          } else {
+            const compressed = await compressImage(reader.result as string, 1000, 1000, 0.7);
+            setSelectedImage(compressed);
+            setSelectedVideo(null);
+          }
+        } catch (err) {
+          console.error("Processing failed:", err);
+          setUploadError("Could not read media file.");
+        }
+      }
+      setUploadingImage(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleDownloadMedia = async (url: string, isVideo: boolean = false) => {
+    const ext = isVideo ? "mp4" : "png";
+    const prefix = isVideo ? "shared-video" : "shared-image";
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = `${prefix}-${Date.now()}.${ext}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      const link = document.createElement("a");
+      link.href = url;
+      link.target = "_blank";
+      link.download = `${prefix}-${Date.now()}.${ext}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
+  const handleDownloadImage = async (url: string) => {
+    await handleDownloadMedia(url, false);
+  };
+
+  const handleReportSubmit = async () => {
+    if (!user || !reportTargetUser || !reportReason) {
+      setReportError("Please select a reason for reporting.");
+      return;
+    }
+
+    setReportingInFlight(true);
+    setReportError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/reports`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ReporterID: user.ID,
+          ReportedUserID: reportTargetUser.ID,
+          Reason: reportReason,
+          Details: reportDetails,
+        }),
+      });
+
+      if (res.ok) {
+        setReportSuccess(true);
+        setTimeout(() => {
+          setShowReportModal(false);
+          setReportSuccess(false);
+          setReportReason("");
+          setReportDetails("");
+          setReportTargetUser(null);
+        }, 2200);
+      } else {
+        const errData = await res.json();
+        setReportError(errData.error || "Failed to submit report. Please try again.");
+      }
+    } catch (e) {
+      console.error(e);
+      setReportError("Network error. Please check your connection and try again.");
+    } finally {
+      setReportingInFlight(false);
+    }
   };
 
   const handleUserClick = async (userId: string) => {
@@ -249,7 +408,7 @@ export function ChatRoomPage() {
   };
 
   return (
-    <div className="h-full flex flex-col bg-[#0A0B14]">
+    <div className="h-full w-full flex flex-col bg-[#0A0B14] shadow-2xl">
       {/* Header - Clickable for full info */}
       <header className="px-4 py-4 flex items-center justify-between border-b border-white/5 bg-[#11131F] z-10 shrink-0">
         <div className="flex items-center gap-3">
@@ -354,15 +513,62 @@ export function ChatRoomPage() {
                   <div
                     onClick={() => !isMe && handleUserClick(msg.SenderID)}
                     className={cn(
-                      "px-5 py-3.5 rounded-[28px] shadow-2xl relative",
+                      "px-5 py-3.5 rounded-[28px] shadow-2xl relative overflow-hidden",
                       isMe
                         ? "bg-gradient-to-br from-[#FF3B5C] to-[#7042F8] text-white rounded-tr-none"
                         : "bg-[#1A1A24] text-white/90 rounded-tl-none border border-white/5 cursor-pointer hover:bg-[#252533] transition-colors",
+                      (msg.ImageUrl || msg.VideoUrl) && "p-1.5 max-w-[280px]"
                     )}
                   >
-                    <p className="text-[14px] font-medium leading-relaxed tracking-tight">
-                      {msg.Content}
-                    </p>
+                    {msg.ImageUrl && (
+                      <div className="relative rounded-[20px] overflow-hidden bg-black/40">
+                        <img
+                          src={getAssetUrl(msg.ImageUrl)}
+                          alt="Attached media"
+                          className="w-full max-h-72 object-cover rounded-[20px] cursor-zoom-in hover:scale-[1.02] active:scale-95 transition-all duration-200"
+                          referrerPolicy="no-referrer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setLightboxImage(getAssetUrl(msg.ImageUrl));
+                          }}
+                        />
+                      </div>
+                    )}
+                    {msg.VideoUrl && (
+                      <div className="relative rounded-[20px] overflow-hidden bg-black/40 group cursor-pointer">
+                        <video
+                          src={getAssetUrl(msg.VideoUrl)}
+                          className="w-full max-h-72 object-cover rounded-[20px] cursor-zoom-in hover:scale-[1.02] active:scale-95 transition-all duration-200"
+                          playsInline
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setLightboxVideo(getAssetUrl(msg.VideoUrl));
+                          }}
+                        />
+                        {/* Interactive Play icon overlay */}
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setLightboxVideo(getAssetUrl(msg.VideoUrl));
+                          }}
+                          className="absolute inset-0 flex items-center justify-center bg-black/10 hover:bg-black/30 transition-all duration-200 cursor-zoom-in"
+                        >
+                          <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/20 text-white shrink-0 shadow-lg hover:scale-110 active:scale-90 transition-transform">
+                            <svg className="w-5 h-5 fill-current translate-x-0.5 text-white" viewBox="0 0 24 24">
+                              <path d="M8 5v14l11-7z" />
+                            </svg>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {msg.Content && (
+                      <p className={cn(
+                        "text-[14px] font-medium leading-relaxed tracking-tight",
+                        (msg.ImageUrl || msg.VideoUrl) ? "px-3.5 py-2.5 mt-1" : ""
+                      )}>
+                        {msg.Content}
+                      </p>
+                    )}
                   </div>
                   <p
                     className={cn(
@@ -752,10 +958,10 @@ export function ChatRoomPage() {
                         )}
                       </div>
 
-                      <div className="px-6 -mt-4 relative z-10 space-y-8 pb-32 pt-10">
+                      <div className="px-6 -mt-[13px] relative z-10 space-y-8 pb-32 pt-[16px]">
                         {/* Name & Bio */}
                         <div>
-                          <h3 className="text-[10px] font-bold text-white/40 tracking-wider mb-2 uppercase">
+                          <h3 className="text-[10px] font-bold text-white/40 tracking-wider mb-0 uppercase pt-0 pl-0">
                             About Me
                           </h3>
                           <p className="text-sm text-white/80 leading-relaxed">
@@ -884,7 +1090,17 @@ export function ChatRoomPage() {
                         )}
 
                         <div className="pt-6 border-t border-white/10 uppercase">
-                          <button className="w-full py-4 text-xs font-black text-red-500 hover:text-red-400 transition-colors tracking-widest text-center">
+                          <button
+                            onClick={() => {
+                              setReportReason("");
+                              setReportDetails("");
+                              setReportError(null);
+                              setReportSuccess(false);
+                              setReportTargetUser(otherUser);
+                              setShowReportModal(true);
+                            }}
+                            className="w-full py-4 text-xs font-black text-red-500 hover:text-red-400 transition-colors tracking-widest text-center cursor-pointer"
+                          >
                             REPORT PROFILE
                           </button>
                         </div>
@@ -1090,7 +1306,7 @@ export function ChatRoomPage() {
               <div className="px-6 -mt-4 relative z-10 space-y-8 pb-32 pt-10">
                 {/* Name & Bio */}
                 <div>
-                  <h3 className="text-[10px] font-bold text-white/40 tracking-wider mb-2 uppercase">
+                  <h3 className="text-[10px] font-bold text-white/40 tracking-wider mb-2 uppercase pt-[30px] pl-0">
                     About Me
                   </h3>
                   <p className="text-sm text-white/80 leading-relaxed">
@@ -1218,7 +1434,17 @@ export function ChatRoomPage() {
                 )}
 
                 <div className="pt-6 border-t border-white/10 uppercase">
-                  <button className="w-full py-4 text-xs font-black text-red-500 hover:text-red-400 transition-colors tracking-widest text-center">
+                  <button
+                    onClick={() => {
+                      setReportReason("");
+                      setReportDetails("");
+                      setReportError(null);
+                      setReportSuccess(false);
+                      setReportTargetUser(selectedUser);
+                      setShowReportModal(true);
+                    }}
+                    className="w-full py-4 text-xs font-black text-red-500 hover:text-red-400 transition-colors tracking-widest text-center cursor-pointer"
+                  >
                     REPORT PROFILE
                   </button>
                 </div>
@@ -1238,26 +1464,426 @@ export function ChatRoomPage() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Full Image Lightbox with Save & Download action */}
+        <AnimatePresence>
+          {lightboxImage && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => setLightboxImage(null)}
+              className="fixed inset-0 bg-black/95 backdrop-blur-md z-50 flex flex-col items-center justify-center p-4 cursor-zoom-out"
+            >
+              {/* Top controls header */}
+              <motion.div 
+                initial={{ y: -20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: -20, opacity: 0 }}
+                onClick={(e) => e.stopPropagation()}
+                className="absolute top-0 inset-x-0 h-16 bg-gradient-to-b from-black/60 to-transparent flex items-center justify-between px-6 pointer-events-auto"
+              >
+                <button
+                  onClick={() => setLightboxImage(null)}
+                  className="w-10 h-10 rounded-full flex items-center justify-center bg-black/40 text-white/70 hover:text-white hover:bg-black/60 transition-all cursor-pointer border border-white/5 active:scale-95"
+                >
+                  <X size={18} />
+                </button>
+                
+                <span className="text-xs font-black uppercase tracking-[0.2em] text-white/50">
+                  IMAGE VIEWER
+                </span>
+
+                <button
+                  onClick={() => handleDownloadImage(lightboxImage)}
+                  className="w-10 h-10 rounded-full flex items-center justify-center bg-brand-accent/20 text-brand-accent hover:text-white hover:bg-brand-accent transition-all cursor-pointer border border-brand-accent/25 active:scale-95"
+                  title="Save Shared Image"
+                >
+                  <Download size={18} />
+                </button>
+              </motion.div>
+
+              {/* Main Image content */}
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                onClick={(e) => e.stopPropagation()}
+                className="relative max-w-full max-h-[85vh] flex items-center justify-center"
+              >
+                <img
+                  src={lightboxImage}
+                  alt="Shared media detail"
+                  className="max-w-full max-h-[80vh] object-contain rounded-2xl shadow-[0_25px_60px_rgba(0,0,0,0.8)] border border-white/10 select-all"
+                  referrerPolicy="no-referrer"
+                />
+              </motion.div>
+
+              {/* Action hints */}
+              <motion.div
+                initial={{ y: 15, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: 15, opacity: 0 }}
+                className="absolute bottom-6 text-[10px] font-black uppercase tracking-[0.25em] text-white/40"
+              >
+                Click backdrop to return
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Full Video Lightbox with Save & Download action */}
+        <AnimatePresence>
+          {lightboxVideo && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => setLightboxVideo(null)}
+              className="fixed inset-0 bg-black/95 backdrop-blur-md z-50 flex flex-col items-center justify-center p-4 cursor-zoom-out"
+            >
+              {/* Top controls header */}
+              <motion.div 
+                initial={{ y: -20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: -20, opacity: 0 }}
+                onClick={(e) => e.stopPropagation()}
+                className="absolute top-0 inset-x-0 h-16 bg-gradient-to-b from-black/60 to-transparent flex items-center justify-between px-6 pointer-events-auto"
+              >
+                <button
+                  onClick={() => setLightboxVideo(null)}
+                  className="w-10 h-10 rounded-full flex items-center justify-center bg-black/40 text-white/70 hover:text-white hover:bg-black/60 transition-all cursor-pointer border border-white/5 active:scale-95"
+                >
+                  <X size={18} />
+                </button>
+                
+                <span className="text-xs font-black uppercase tracking-[0.2em] text-white/50">
+                  VIDEO PLAYER
+                </span>
+
+                <button
+                  onClick={() => handleDownloadMedia(lightboxVideo, true)}
+                  className="w-10 h-10 rounded-full flex items-center justify-center bg-brand-accent/20 text-brand-accent hover:text-white hover:bg-brand-accent transition-all cursor-pointer border border-brand-accent/25 active:scale-95"
+                  title="Save Shared Video"
+                >
+                  <Download size={18} />
+                </button>
+              </motion.div>
+
+              {/* Main Video content */}
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                onClick={(e) => e.stopPropagation()}
+                className="relative max-w-full max-h-[85vh] flex items-center justify-center"
+              >
+                <video
+                  src={lightboxVideo}
+                  controls
+                  autoPlay
+                  playsInline
+                  className="max-w-full max-h-[80vh] object-contain rounded-2xl shadow-[0_25px_60px_rgba(0,0,0,0.8)] border border-white/10"
+                />
+              </motion.div>
+
+              {/* Action hints */}
+              <motion.div
+                initial={{ y: 15, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: 15, opacity: 0 }}
+                className="absolute bottom-6 text-[10px] font-black uppercase tracking-[0.25em] text-white/40"
+              >
+                Click backdrop to return
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* User Reporting modal */}
+        <AnimatePresence>
+          {showReportModal && reportTargetUser && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/90 backdrop-blur-md z-[100] flex items-center justify-center p-4 cursor-default"
+              onClick={() => {
+                if (!reportingInFlight && !reportSuccess) {
+                  setShowReportModal(false);
+                }
+              }}
+            >
+              <motion.div
+                initial={{ scale: 0.95, y: 20 }}
+                animate={{ scale: 1, y: 0 }}
+                exit={{ scale: 0.95, y: 20 }}
+                transition={{ type: "spring", duration: 0.4 }}
+                className="w-full max-w-md bg-[#0F101A] border border-white/10 rounded-3xl p-6 shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden relative"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {reportSuccess ? (
+                  <div className="flex flex-col items-center text-center py-8 space-y-4">
+                    <div className="w-16 h-16 rounded-full bg-emerald-500/15 text-emerald-400 flex items-center justify-center border border-emerald-500/30 scale-110 mb-2">
+                      <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <span className="text-xs font-black uppercase tracking-[0.25em] text-brand-accent">
+                      REPORT TRANSMITTED
+                    </span>
+                    <h3 className="text-xl font-bold text-white tracking-wide uppercase">
+                      Safety Priority Queued
+                    </h3>
+                    <p className="text-xs text-white/50 leading-relaxed max-w-[280px]">
+                      Your report regarding <strong>{reportTargetUser.RealName}</strong> has been secured and sent to the moderation team.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col space-y-5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black uppercase tracking-[0.2em] text-red-500">
+                        REPORT A USER
+                      </span>
+                      <button
+                        onClick={() => setShowReportModal(false)}
+                        className="text-white/40 hover:text-white transition-colors"
+                        disabled={reportingInFlight}
+                      >
+                        <X size={18} />
+                      </button>
+                    </div>
+
+                    <div>
+                      <h3 className="text-lg font-bold text-white tracking-wide uppercase mb-1">
+                        Report {reportTargetUser.RealName}
+                      </h3>
+                      <p className="text-[11px] text-white/40 leading-relaxed font-medium uppercase tracking-tight">
+                        Confidential reporting secures safety. Please select a reason below.
+                      </p>
+                    </div>
+
+                    {reportError && (
+                      <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-xs font-semibold">
+                        {reportError}
+                      </div>
+                    )}
+
+                    {/* Common reasons list */}
+                    <div className="space-y-2">
+                      {[
+                        "Harassment or bullying",
+                        "Inappropriate profile photo or bio",
+                        "Spam, scam, or fake profile",
+                        "Hate speech or offensive conduct",
+                        "Other issues"
+                      ].map((reasonItem) => {
+                        const isSelected = reportReason === reasonItem;
+                        return (
+                          <button
+                            key={reasonItem}
+                            type="button"
+                            onClick={() => {
+                              setReportReason(reasonItem);
+                              setReportError(null);
+                            }}
+                            className={cn(
+                              "w-full px-4 py-3 rounded-2xl text-left text-xs font-bold uppercase tracking-wider transition-all duration-200 border cursor-pointer",
+                              isSelected
+                                ? "bg-red-500/25 border-red-500 text-white shadow-lg shadow-red-500/10"
+                                : "bg-white/5 border-white/5 text-white/60 hover:text-white hover:bg-white/10"
+                            )}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span>{reasonItem}</span>
+                              {isSelected && (
+                                <div className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_#EF4444]" />
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Details input */}
+                    <div className="flex flex-col space-y-1.5">
+                      <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">
+                        Details (Optional)
+                      </label>
+                      <textarea
+                        value={reportDetails}
+                        onChange={(e) => setReportDetails(e.target.value)}
+                        placeholder="PROVIDE ADDITIONAL REASONS OR CONTEXT REGARDING YOUR COMPLAINT..."
+                        rows={3}
+                        className="w-full bg-white/5 border border-white/10 rounded-2xl p-3 text-xs text-white placeholder:text-white/20 outline-none focus:border-red-500/50 transition-colors uppercase font-bold tracking-tight"
+                      />
+                    </div>
+
+                    {/* Action button triggers */}
+                    <div className="flex gap-3 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowReportModal(false)}
+                        className="flex-1 py-3.5 rounded-2xl border border-white/10 text-white/60 hover:text-white text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all text-center cursor-pointer"
+                        disabled={reportingInFlight}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleReportSubmit}
+                        disabled={reportingInFlight || !reportReason}
+                        className={cn(
+                          "flex-1 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all text-center cursor-pointer",
+                          reportingInFlight || !reportReason
+                            ? "bg-white/5 text-white/20 cursor-not-allowed"
+                            : "bg-gradient-to-r from-red-600 to-amber-600 text-white shadow-lg shadow-red-600/20 hover:from-red-500 hover:to-amber-500"
+                        )}
+                      >
+                        {reportingInFlight ? "Transmitting..." : "Submit Report"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Input */}
-      <div className="p-4 pt-2 shrink-0 bg-[#11131F] border-t border-white/5">
+      <div className="p-4 pt-2 shrink-0 bg-[#11131F] border-t border-white/5 flex flex-col gap-2">
+        <input
+          type="file"
+          ref={fileInputRef}
+          accept="image/*,video/mp4,video/webm,video/quicktime,video/mov"
+          className="hidden"
+          onChange={handleLocalImageUpload}
+        />
+
+        {/* Upload Error feedback banner */}
+        {uploadError && (
+          <div className="relative self-start ml-2 mb-1 px-3 py-2 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl flex items-center gap-2 text-xs font-semibold">
+            <span>{uploadError}</span>
+            <button
+              type="button"
+              onClick={() => setUploadError(null)}
+              className="text-red-400 hover:text-white transition-colors ml-2"
+            >
+              <X size={12} />
+            </button>
+          </div>
+        )}
+
+        {/* Selected Image Preview */}
+        {selectedImage && (
+          <div className="relative self-start ml-2 mb-1 p-1 bg-white/5 border border-white/10 rounded-2xl flex items-center gap-2 max-w-full">
+            <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-black/40 border border-white/10 shrink-0">
+              <img
+                src={selectedImage}
+                alt="Selected preview"
+                className="w-full h-full object-cover"
+              />
+              {uploadingImage && (
+                <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-[10px] font-bold text-white uppercase tracking-wider">
+                  Sync...
+                </div>
+              )}
+            </div>
+            <div className="flex flex-col min-w-0 pr-6">
+              <span className="text-[10px] font-black text-brand-accent uppercase tracking-widest leading-none">
+                ATTACHED
+              </span>
+              <span className="text-[9px] text-white/40 truncate max-w-[120px] mt-1">
+                Image ready to transmit
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedImage(null);
+                if (fileInputRef.current) fileInputRef.current.value = "";
+              }}
+              className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-red-500/90 text-white flex items-center justify-center border border-black/50 hover:bg-red-600 transition-colors cursor-pointer"
+            >
+              <X size={12} />
+            </button>
+          </div>
+        )}
+
+        {/* Selected Video Preview */}
+        {selectedVideo && (
+          <div className="relative self-start ml-2 mb-1 p-1 bg-white/5 border border-white/10 rounded-2xl flex items-center gap-2 max-w-full">
+            <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-black/40 border border-white/10 shrink-0">
+              <video
+                src={selectedVideo}
+                className="w-full h-full object-cover"
+              />
+              {uploadingImage && (
+                <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-[10px] font-bold text-white uppercase tracking-wider">
+                  Sync...
+                </div>
+              )}
+            </div>
+            <div className="flex flex-col min-w-0 pr-6">
+              <span className="text-[10px] font-black text-brand-accent uppercase tracking-widest leading-none">
+                ATTACHED VIDEO
+              </span>
+              <span className="text-[9px] text-white/40 truncate max-w-[120px] mt-1">
+                Video ready to transmit (Max 20MB)
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedVideo(null);
+                if (fileInputRef.current) fileInputRef.current.value = "";
+              }}
+              className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-red-500/90 text-white flex items-center justify-center border border-black/50 hover:bg-red-600 transition-colors cursor-pointer"
+            >
+              <X size={12} />
+            </button>
+          </div>
+        )}
+
         <form
           onSubmit={handleSend}
-          className="flex gap-2 bg-white/5 rounded-full p-1 border border-white/5 overflow-hidden"
+          className="flex gap-2 bg-white/5 rounded-full p-1 border border-white/5 items-center overflow-hidden"
         >
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className={cn(
+              "w-12 h-12 rounded-full flex items-center justify-center transition-all shrink-0 cursor-pointer",
+              (selectedImage || selectedVideo)
+                ? "bg-brand-accent/25 text-brand-accent"
+                : "bg-white/5 text-white/50 hover:text-white"
+            )}
+          >
+            <ImageIcon size={18} />
+          </button>
           <input
             type="text"
-            placeholder="SEND MESSAGE..."
+            placeholder={
+              selectedImage 
+                ? "ADD CAPTION (OPTIONAL)..." 
+                : selectedVideo 
+                  ? "ADD VIDEO CAPTION (OPTIONAL)..." 
+                  : "SEND MESSAGE..."
+            }
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            className="flex-1 bg-transparent px-4 py-3 outline-none text-sm text-white placeholder:text-white/20 font-bold uppercase tracking-tight"
+            className="flex-1 bg-transparent px-2 py-3 outline-none text-sm text-white placeholder:text-white/20 font-bold uppercase tracking-tight"
           />
           <button
             type="submit"
             className={cn(
-              "w-12 h-12 rounded-full flex items-center justify-center transition-all",
-              message.trim()
+              "w-12 h-12 rounded-full flex items-center justify-center transition-all shrink-0",
+              message.trim() || selectedImage || selectedVideo
                 ? "bg-gradient-to-r from-brand-primary to-brand-secondary text-white shadow-lg shadow-brand-primary/20"
                 : "bg-white/5 text-white/20",
             )}

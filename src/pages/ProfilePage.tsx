@@ -115,7 +115,7 @@ export function ProfilePage() {
   };
 
   return (
-    <div className="h-full w-full bg-transparent flex flex-col overflow-y-auto">
+    <div className="h-full w-full bg-transparent flex flex-col overflow-y-auto pb-24">
       
       {/* Hero Carousel Section */}
       <div className="relative h-[550px] w-full shrink-0 bg-[#0A0B14] flex items-center justify-center overflow-hidden">

@@ -54,21 +54,17 @@ export function CreatePartyPage() {
   const [partyTime, setPartyTime] = useState('');
   const [crowdfundTarget, setCrowdfundTarget] = useState(0);
   const [showWalletInput, setShowWalletInput] = useState(false);
-  const [mapPosition, setMapPosition] = useState<L.LatLng | null>(null);
+  const [mapPosition, setMapPosition] = useState<L.LatLng | null>(
+    coords ? new L.LatLng(coords.lat, coords.lon) : null
+  );
   const [errors, setErrors] = useState<string[]>([]);
   const [success, setSuccess] = useState(false);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
 
-  useEffect(() => {
-    if (coords && !mapPosition) {
-       setMapPosition(new L.LatLng(coords.lat, coords.lon));
-    } else if (!coords) {
-       refreshLocation((newCoords) => {
-          setMapPosition(new L.LatLng(newCoords.lat, newCoords.lon));
-       });
-    }
-  }, [coords]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const validate = () => {
     const errs: string[] = [];
@@ -133,7 +129,7 @@ export function CreatePartyPage() {
       const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
       const data = await res.json();
       if (data.address) {
-        if (!city) setCity(data.address.city || data.address.town || data.address.village || '');
+        setCity(data.address.city || data.address.town || data.address.village || data.address.municipality || '');
         setAddress(data.display_name);
       }
     } catch (e) {
@@ -141,27 +137,89 @@ export function CreatePartyPage() {
     }
   };
 
-  useEffect(() => {
-    const fetchLocation = async () => {
-      try {
-        if (window.location.protocol !== 'file:' && !(window as any).Capacitor) {
-          if ('geolocation' in navigator) {
-            navigator.geolocation.getCurrentPosition((pos) => {
-              setMapPosition(L.latLng(pos.coords.latitude, pos.coords.longitude));
-            }, (err) => {
+  const fetchCurrentLocation = async () => {
+    setIsLocating(true);
+    const fallbackToDefault = () => {
+      if (coords) {
+        setMapPosition(new L.LatLng(coords.lat, coords.lon));
+      } else {
+        // Fallback to New York if no coordinates are available
+        setMapPosition(new L.LatLng(40.7128, -74.0060));
+      }
+      setIsLocating(false);
+    };
+
+    try {
+      if (window.location.protocol !== 'file:' && !(window as any).Capacitor) {
+        if ('geolocation' in navigator) {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              const newPos = new L.LatLng(pos.coords.latitude, pos.coords.longitude);
+              setMapPosition(newPos);
+              setIsLocating(false);
+            },
+            (err) => {
               console.warn("Browser geolocation disabled or blocked:", err);
-            });
-          }
+              fallbackToDefault();
+            },
+            { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+          );
         } else {
+          fallbackToDefault();
+        }
+      } else {
+        try {
           await Geolocation.requestPermissions();
           const pos = await Geolocation.getCurrentPosition();
-          setMapPosition(L.latLng(pos.coords.latitude, pos.coords.longitude));
+          const newPos = new L.LatLng(pos.coords.latitude, pos.coords.longitude);
+          setMapPosition(newPos);
+          setIsLocating(false);
+        } catch (mobileErr) {
+          console.warn("Capacitor geolocation failed:", mobileErr);
+          fallbackToDefault();
         }
-      } catch (e) {
-        console.warn("Location permission denied or unavailable:", e);
       }
-    };
-    fetchLocation();
+    } catch (e) {
+      console.warn("Location permission denied or unavailable:", e);
+      fallbackToDefault();
+    }
+  };
+
+  const handleSearchLocation = async () => {
+    if (!searchQuery.trim()) return;
+    setIsSearching(true);
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=1&addressdetails=1`);
+      const data = await res.json();
+      if (data && data.length > 0) {
+        const item = data[0];
+        const newPos = new L.LatLng(parseFloat(item.lat), parseFloat(item.lon));
+        setMapPosition(newPos);
+        
+        if (item.display_name) {
+          setAddress(item.display_name);
+          
+          const addr = item.address || {};
+          const parsedCity = addr.city || addr.town || addr.village || addr.municipality || addr.county || '';
+          if (parsedCity) {
+            setCity(parsedCity);
+          } else {
+            const parts = item.display_name.split(',');
+            if (parts.length > 0) {
+              setCity(parts[0].trim());
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.error("Geocoding query failed", e);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCurrentLocation();
   }, []);
 
   useEffect(() => {
@@ -192,10 +250,11 @@ export function CreatePartyPage() {
   };
 
   return (
-    <div className="h-full w-full bg-transparent flex flex-col overflow-y-auto pt-4 px-4 scrollbar-hide pb-28">
-      
-      {/* TILE HEADER */}
-      <div className="mb-4">
+    <div className="h-full w-full bg-transparent flex flex-col overflow-y-auto py-6 scrollbar-hide pb-28">
+      <div className="w-full flex flex-col">
+        
+        {/* TILE HEADER */}
+        <div className="mb-4">
         <div className="bg-[#11131F] border border-white/5 rounded-2xl p-4 relative overflow-hidden group shadow-lg">
           <div className="absolute top-0 right-0 w-32 h-32 bg-brand-primary/10 blur-[40px] -mr-16 -mt-16" />
           <div className="relative z-10 flex items-center gap-3">
@@ -384,16 +443,69 @@ export function CreatePartyPage() {
              <h3 className="text-[10px] font-black text-white/40 tracking-[0.2em] uppercase">Map Picker</h3>
           </div>
           <div className="bg-[#11131F] border border-white/5 rounded-2xl p-3 space-y-3">
-             <div className="h-[180px] w-full bg-[#f8f9fa] rounded-xl overflow-hidden shadow-inner border border-white/5 z-0">
-                <MapContainer center={mapPosition ? [mapPosition.lat, mapPosition.lng] : [40.7128, -74.0060]} zoom={13} scrollWheelZoom={false} style={{ height: '100%', width: '100%' }}>
-                   <TileLayer
-                     url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+             {/* Map Search & Locate Me Buttons */}
+             <div className="flex gap-2">
+                <div className="flex-1 flex items-center gap-2 bg-white/5 rounded-xl px-3 py-2 border border-white/5 focus-within:border-brand-accent/40 transition-all">
+                   <Search size={14} className="text-white/40 shrink-0" />
+                   <input 
+                     type="text" 
+                     placeholder="SEARCH DESTINATION..." 
+                     value={searchQuery}
+                     onChange={e => setSearchQuery(e.target.value)}
+                     onKeyDown={e => {
+                       if (e.key === 'Enter') {
+                         e.preventDefault();
+                         handleSearchLocation();
+                       }
+                     }}
+                     className="w-full bg-transparent border-none outline-none text-xs font-bold text-white placeholder:text-white/20 uppercase" 
                    />
-                   <LocationMarker position={mapPosition} setPosition={setMapPosition} />
-                </MapContainer>
+                   {searchQuery && (
+                     <button 
+                       type="button" 
+                       onClick={() => setSearchQuery('')}
+                       className="text-white/30 hover:text-white/60"
+                     >
+                       <X size={12} />
+                     </button>
+                   )}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSearchLocation}
+                  disabled={isSearching}
+                  className="px-3 bg-brand-accent hover:opacity-90 disabled:opacity-50 text-[#0A0B14] rounded-xl flex items-center justify-center text-[10px] font-black tracking-widest uppercase transition-all"
+                >
+                  {isSearching ? <Loader2 size={14} className="animate-spin" /> : "FIND"}
+                </button>
+                <button
+                  type="button"
+                  onClick={fetchCurrentLocation}
+                  disabled={isLocating}
+                  title="Locate Me"
+                  className="w-10 bg-white/5 hover:bg-white/10 text-brand-accent rounded-xl flex items-center justify-center border border-white/5 transition-all"
+                >
+                  {isLocating ? <Loader2 size={14} className="animate-spin" /> : <MapPin size={14} />}
+                </button>
              </div>
-             <p className="text-[8px] font-bold text-white/20 uppercase text-center px-4 tracking-wider">Tap on the map to drop the marker at the exact party location</p>
+
+             <div className="h-[180px] w-full bg-[#f8f9fa] rounded-xl overflow-hidden shadow-inner border border-white/5 z-0 relative">
+                {mapPosition ? (
+                  <MapContainer center={[mapPosition.lat, mapPosition.lng]} zoom={13} scrollWheelZoom={false} style={{ height: '100%', width: '100%' }}>
+                     <TileLayer
+                       url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+                       attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+                     />
+                     <LocationMarker position={mapPosition} setPosition={setMapPosition} />
+                  </MapContainer>
+                ) : (
+                  <div className="w-full h-full bg-[#11131F]/50 flex flex-col items-center justify-center gap-2">
+                     <Loader2 className="text-brand-accent animate-spin" size={24} />
+                     <span className="text-[10px] font-black tracking-widest text-white/40 uppercase">Acquiring Frequency...</span>
+                  </div>
+                )}
+             </div>
+             <p className="text-[8px] font-bold text-white/20 uppercase text-center px-4 tracking-wider">Tap on the map or type above to find the exact location</p>
              
              <div className="space-y-3 pt-3 border-t border-white/5">
                 <div className="flex items-center gap-3 bg-white/5 rounded-xl px-3 py-2 border border-white/5">
@@ -533,6 +645,7 @@ export function CreatePartyPage() {
          </div>
 
       </div>
+     </div>
 
     </div>
   );

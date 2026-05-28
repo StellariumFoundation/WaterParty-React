@@ -48,6 +48,7 @@ export function SwipePage() {
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
   const [currentPartyPhotoIndex, setCurrentPartyPhotoIndex] = useState(0);
   const [currentUserPhotoIndex, setCurrentUserPhotoIndex] = useState(0);
+  const [cardPhotoIndices, setCardPhotoIndices] = useState<Record<string, number>>({});
 
   const getDistance = (
     lat1: number,
@@ -173,7 +174,7 @@ export function SwipePage() {
   };
 
   return (
-    <div className="relative h-full w-full flex flex-col bg-[#050505] overflow-hidden">
+    <div className="relative h-full flex flex-col bg-[#050505] overflow-hidden pt-2.5 mx-3">
       {/* Header - Floating over the cards */}
       <header className="absolute top-0 left-0 right-0 px-6 pt-8 pb-4 flex justify-between items-center z-40 bg-gradient-to-b from-black/60 to-transparent pointer-events-none">
         <div className="text-2xl font-black bg-gradient-to-r from-brand-primary to-brand-secondary text-transparent bg-clip-text tracking-tighter pointer-events-auto">
@@ -186,226 +187,291 @@ export function SwipePage() {
       </header>
 
       {/* Cards Container */}
-      <div className="flex-1 relative flex items-center justify-center">
-        {swipeFeed.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full space-y-4 animate-in fade-in zoom-in duration-500">
-            <Waves size={48} className="text-brand-accent opacity-80" />
-            <div className="text-center">
-              <h2 className="text-lg tracking-[0.2em] font-light text-white/50 uppercase">
-                Silence
-              </h2>
-              <p className="text-xs text-white/30 tracking-widest uppercase mt-1">
-                No parties nearby
-              </p>
+      <div className="flex-1 relative overflow-hidden">
+        <div className="absolute inset-0 w-full h-full overflow-hidden flex flex-col">
+          {swipeFeed.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full space-y-4 animate-in fade-in zoom-in duration-500">
+              <Waves size={48} className="text-brand-accent opacity-80" />
+              <div className="text-center">
+                <h2 className="text-lg tracking-[0.2em] font-light text-white/50 uppercase">
+                  Silence
+                </h2>
+                <p className="text-xs text-white/30 tracking-widest uppercase mt-1">
+                  No parties nearby
+                </p>
+              </div>
             </div>
-          </div>
-        ) : (
-          <AnimatePresence>
-            {swipeFeed.map((party, index) => {
-              const isTop = index === activeIndex;
-              const displayImage =
-                party.PartyPhotos?.length > 0
-                  ? getAssetUrl(party.PartyPhotos[0])
-                  : party.Thumbnail
-                    ? getAssetUrl(party.Thumbnail)
-                    : PARTY_PLACEHOLDER;
+          ) : (
+            <AnimatePresence>
+              {swipeFeed.map((party, index) => {
+                const isTop = index === activeIndex;
+                const currentIdx = cardPhotoIndices[party.ID] || 0;
+                const photos = party.PartyPhotos && party.PartyPhotos.length > 0 ? party.PartyPhotos : [];
+                const displayImage =
+                  photos.length > 0
+                    ? getAssetUrl(photos[currentIdx] || photos[0])
+                    : party.Thumbnail
+                      ? getAssetUrl(party.Thumbnail)
+                      : PARTY_PLACEHOLDER;
 
-              const date = party.StartTime
-                ? new Date(party.StartTime)
-                : new Date();
+                const date = party.StartTime
+                  ? new Date(party.StartTime)
+                  : new Date();
 
-              const now = new Date();
-              const diffMs = date.getTime() - now.getTime();
-              let dateStr = "";
-              if (diffMs < 0 && diffMs > -4 * 3600 * 1000) {
-                dateStr = "HAPPENING NOW";
-              } else if (diffMs < 0) {
-                dateStr = "ENDED";
-              } else {
-                const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-                const diffDays = Math.floor(diffHours / 24);
-                if (diffDays > 0) {
-                  dateStr = `IN ${diffDays} DAY${diffDays > 1 ? "S" : ""}`;
-                } else if (diffHours > 0) {
-                  dateStr = `IN ${diffHours} HOUR${diffHours > 1 ? "S" : ""}`;
+                const now = new Date();
+                const diffMs = date.getTime() - now.getTime();
+                let dateStr = "";
+                if (diffMs < 0 && diffMs > -4 * 3600 * 1000) {
+                  dateStr = "HAPPENING NOW";
+                } else if (diffMs < 0) {
+                  dateStr = "ENDED";
                 } else {
-                  const diffMins = Math.floor(diffMs / (1000 * 60));
-                  dateStr = `IN ${diffMins} MIN${diffMins > 1 ? "S" : ""}`;
+                  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                  const diffDays = Math.floor(diffHours / 24);
+                  if (diffDays > 0) {
+                    dateStr = `IN ${diffDays} DAY${diffDays > 1 ? "S" : ""}`;
+                  } else if (diffHours > 0) {
+                    dateStr = `IN ${diffHours} HOUR${diffHours > 1 ? "S" : ""}`;
+                  } else {
+                    const diffMins = Math.floor(diffMs / (1000 * 60));
+                    dateStr = `IN ${diffMins} MIN${diffMins > 1 ? "S" : ""}`;
+                  }
                 }
-              }
 
-              const exitX =
-                swipeDir[party.ID] === "left"
-                  ? -300
-                  : swipeDir[party.ID] === "right"
-                    ? 300
-                    : 0;
-              const exitRotate =
-                swipeDir[party.ID] === "left"
-                  ? -15
-                  : swipeDir[party.ID] === "right"
-                    ? 15
-                    : 0;
+                const exitX =
+                  swipeDir[party.ID] === "left"
+                    ? -300
+                    : swipeDir[party.ID] === "right"
+                      ? 300
+                      : 0;
+                const exitRotate =
+                  swipeDir[party.ID] === "left"
+                    ? -15
+                    : swipeDir[party.ID] === "right"
+                      ? 15
+                      : 0;
 
-              return (
-                <motion.div
-                  key={party.ID}
-                  className={cn(
-                    "absolute inset-0 bottom-[88px] rounded-b-[48px] overflow-hidden shadow-[0_25px_70px_rgba(0,0,0,0.7)] bg-[#050505]",
-                    !isTop && "pointer-events-none",
-                  )}
-                  style={{ zIndex: index }}
-                  initial={{ scale: 0.95, y: 20, opacity: 0 }}
-                  animate={{
-                    scale: isTop ? 1 : 0.95 - (feed.length - 1 - index) * 0.05,
-                    y: isTop ? 0 : (feed.length - 1 - index) * 15,
-                    opacity: 1,
-                  }}
-                  exit={{
-                    x: exitX,
-                    y: Math.random() * 100 - 50,
-                    opacity: 0,
-                    rotate: exitRotate,
-                    transition: { duration: 0.3, ease: "easeOut" },
-                  }}
-                  drag={isTop ? "x" : false}
-                  dragConstraints={{ left: 0, right: 0 }}
-                  onDragEnd={(e, { offset, velocity }) => {
-                    const swipeThreshold = 100;
-                    if (offset.x > swipeThreshold || velocity.x > 500) {
-                      handleSwipe("right", party.ID);
-                    } else if (
-                      offset.x < -swipeThreshold ||
-                      velocity.x < -500
-                    ) {
-                      handleSwipe("left", party.ID);
-                    }
-                  }}
-                >
-                  <div
-                    className="absolute inset-0 bg-[#111] cursor-pointer z-0"
-                    onClick={() => {
-                      if (isTop) {
-                        setCurrentPartyPhotoIndex(0);
-                        setSelectedParty(party);
+                 return (
+                  <motion.div
+                    key={party.ID}
+                    className={cn(
+                      "absolute inset-0 overflow-hidden bg-[#050505]",
+                      !isTop && "pointer-events-none",
+                    )}
+                    style={{
+                      zIndex: index,
+                    }}
+                    initial={{ scale: 0.95, y: 20, opacity: 0 }}
+                    animate={{
+                      scale: isTop ? 1 : 0.95 - (swipeFeed.length - 1 - index) * 0.05,
+                      y: isTop ? 0 : (swipeFeed.length - 1 - index) * 15,
+                      opacity: 1,
+                    }}
+                    exit={{
+                      x: exitX,
+                      y: Math.random() * 100 - 50,
+                      opacity: 0,
+                      rotate: exitRotate,
+                      transition: { duration: 0.3, ease: "easeOut" },
+                    }}
+                    drag={isTop ? "x" : false}
+                    dragConstraints={{ left: 0, right: 0 }}
+                    onDragEnd={(e, { offset, velocity }) => {
+                      const swipeThreshold = 100;
+                      if (offset.x > swipeThreshold || velocity.x > 500) {
+                        handleSwipe("right", party.ID);
+                      } else if (
+                        offset.x < -swipeThreshold ||
+                        velocity.x < -500
+                      ) {
+                        handleSwipe("left", party.ID);
                       }
                     }}
                   >
-                    <img
-                      src={displayImage}
-                      alt={party.Title}
-                      className="w-full h-full object-cover"
-                      referrerPolicy="no-referrer"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-30" />
-                  </div>
-
-                  <div
-                    className="absolute inset-0 flex flex-col justify-end p-8 pb-32 bg-gradient-to-t from-black/40 via-transparent to-transparent cursor-pointer"
-                    onClick={() => {
-                      if (isTop) {
-                        setCurrentPartyPhotoIndex(0);
-                        setSelectedParty(party);
-                      }
-                    }}
-                  >
-                    <div className="flex items-center space-x-2 mb-3 pointer-events-none">
-                      <span className="px-2.5 py-1 bg-white/10 backdrop-blur-xl rounded-lg text-[9px] font-black text-brand-accent border border-white/5 flex items-center shadow-lg">
-                        ⏳ {dateStr}
-                      </span>
-                      <span className="px-2.5 py-1 bg-white/5 backdrop-blur-xl rounded-lg text-[9px] font-black text-white/50 border border-white/5 uppercase">
-                        {party.City || "Unknown"}
-                      </span>
-                      {coords && party.GeoLat && party.GeoLon && (
-                        <span className="px-2.5 py-1 bg-white/5 backdrop-blur-xl rounded-lg text-[9px] font-black text-brand-accent border border-white/5 uppercase">
-                          {getDistance(
-                            coords.lat,
-                            coords.lon,
-                            party.GeoLat,
-                            party.GeoLon,
-                          )}{" "}
-                          KM
-                        </span>
+                    <div
+                      className="absolute inset-0 bg-[#111] z-0 pointer-events-none"
+                    >
+                      <img
+                        src={displayImage}
+                        alt={party.Title}
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-30 pointer-events-none" />
+                      
+                      {/* Carousel Indicators for Main Swipe Card */}
+                      {isTop && photos.length > 1 && (
+                        <div className="absolute top-4 inset-x-0 flex justify-center gap-1.5 z-20 px-4 pointer-events-none">
+                          {photos.map((_, idx) => (
+                            <div
+                              key={idx}
+                              className={cn(
+                                "h-1 rounded-full flex-1 transition-all",
+                                idx === currentIdx ? "bg-white" : "bg-white/30"
+                              )}
+                            />
+                          ))}
+                        </div>
                       )}
                     </div>
-                    <h2 className="text-3xl font-black text-white leading-[0.8] mb-4 drop-shadow-2xl uppercase tracking-tighter pointer-events-none">
-                      {party.Title}
-                    </h2>
-                    <div className="flex items-center gap-3 mb-6 relative">
-                      <div
-                        className="flex items-center gap-3 cursor-pointer group pointer-events-auto"
-                        onClick={(e) => {
-                          if (!isTop) return;
-                          e.stopPropagation();
-                          handleUserClick(party.HostID);
-                        }}
-                      >
-                        <img
-                          src={
-                            party.HostThumbnail
-                              ? getAssetUrl(party.HostThumbnail)
-                              : USER_PLACEHOLDER
-                          }
-                          className="w-10 h-10 rounded-full object-cover border-2 border-[#00FFA3] shadow-[0_0_15px_rgba(0,255,163,0.4)] group-hover:scale-110 transition-transform"
-                          alt="Host Thumbnail"
-                        />
-                        <div className="flex flex-col">
-                          <span className="text-[9px] font-black text-white/40 uppercase tracking-widest leading-none mb-1">
-                            Hosted By
+
+                    <div
+                      className="absolute inset-0 flex flex-col justify-end p-8 bg-gradient-to-t from-black/80 via-black/20 to-transparent pointer-events-none"
+                      style={{
+                        paddingBottom: "148px",
+                        marginTop: "0px",
+                        marginBottom: "0px"
+                      }}
+                    >
+                      <div className="flex items-center space-x-2 mb-3 pointer-events-none">
+                        <span className="px-2.5 py-1 bg-white/10 backdrop-blur-xl rounded-lg text-[9px] font-black text-brand-accent border border-white/5 flex items-center shadow-lg">
+                          ⏳ {dateStr}
+                        </span>
+                        <span className="px-2.5 py-1 bg-white/5 backdrop-blur-xl rounded-lg text-[9px] font-black text-white/50 border border-white/5 uppercase">
+                          {party.City || "Unknown"}
+                        </span>
+                        {coords && party.GeoLat && party.GeoLon && (
+                          <span className="px-2.5 py-1 bg-white/5 backdrop-blur-xl rounded-lg text-[9px] font-black text-brand-accent border border-white/5 uppercase">
+                            {getDistance(
+                              coords.lat,
+                              coords.lon,
+                              party.GeoLat,
+                              party.GeoLon,
+                            )}{" "}
+                            KM
                           </span>
-                          <span className="text-xs font-black text-white uppercase tracking-wider">
-                            {party.HostName || party.HostID?.slice(0, 6)}
-                          </span>
+                        )}
+                      </div>
+                      <h2 className="text-3xl font-black text-white leading-[0.8] mb-4 drop-shadow-2xl uppercase tracking-tighter pointer-events-none">
+                        {party.Title}
+                      </h2>
+                      <div className="flex items-center gap-3 mb-6 relative">
+                        <div
+                          className="flex items-center gap-3 cursor-pointer group pointer-events-auto"
+                          onClick={(e) => {
+                            if (!isTop) return;
+                            e.stopPropagation();
+                            handleUserClick(party.HostID);
+                          }}
+                        >
+                          <img
+                            src={
+                              party.HostThumbnail
+                                ? getAssetUrl(party.HostThumbnail)
+                                : USER_PLACEHOLDER
+                            }
+                            className="w-10 h-10 rounded-full object-cover border-2 border-[#00FFA3] shadow-[0_0_15px_rgba(0,255,163,0.4)] group-hover:scale-110 transition-transform"
+                            alt="Host Thumbnail"
+                          />
+                          <div className="flex flex-col">
+                            <span className="text-[9px] font-black text-white/40 uppercase tracking-widest leading-none mb-1">
+                              Hosted By
+                            </span>
+                            <span className="text-xs font-black text-white uppercase tracking-wider">
+                              {party.HostName || party.HostID?.slice(0, 6)}
+                            </span>
+                          </div>
                         </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2 pointer-events-none">
+                        {party.VibeTags?.map((tag: string) => (
+                          <span
+                            key={tag}
+                            className="px-2 py-1 bg-white/10 backdrop-blur-md rounded-md text-[8px] font-black text-white/60 uppercase tracking-widest border border-white/5"
+                          >
+                            {tag}
+                          </span>
+                        ))}
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap gap-2 pointer-events-none">
-                      {party.VibeTags?.map((tag: string) => (
-                        <span
-                          key={tag}
-                          className="px-2 py-1 bg-white/10 backdrop-blur-md rounded-md text-[8px] font-black text-white/60 uppercase tracking-widest border border-white/5"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Move action buttons inside the card to overlay directly like Tinder */}
-                  {isTop && (
-                    <div className="absolute bottom-10 inset-x-0 flex justify-center items-center gap-6 z-20 pointer-events-auto">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleSwipe("left", party.ID);
-                        }}
-                        className="w-16 h-16 flex flex-shrink-0 items-center justify-center rounded-full bg-black/30 backdrop-blur-md border border-brand-primary/50 text-brand-primary hover:bg-brand-primary hover:text-white active:scale-90 transition-all duration-200 shadow-[0_10px_30px_rgba(0,0,0,0.4)]"
-                        aria-label="Pass"
-                      >
-                        <X size={32} strokeWidth={3} className="text-current" />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleSwipe("right", party.ID);
-                        }}
-                        className="w-16 h-16 flex flex-shrink-0 items-center justify-center rounded-full bg-black/30 backdrop-blur-md border border-[#00FFA3]/50 text-[#00FFA3] hover:bg-[#00FFA3] hover:text-black active:scale-90 transition-all duration-200 shadow-[0_10px_30px_rgba(0,0,0,0.4)]"
-                        aria-label="Like"
-                      >
-                        <Check
-                          size={32}
-                          strokeWidth={3}
-                          className="text-current"
+                    {/* Touch Zones for Carousel and Modal */}
+                    {isTop && (
+                      <>
+                        {/* Left Carousel Nav */}
+                        <div 
+                          className="absolute top-0 left-0 bottom-[150px] w-1/3 z-10 cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (photos.length > 1) {
+                               setCardPhotoIndices(prev => ({...prev, [party.ID]: Math.max(0, (prev[party.ID] || 0) - 1)}));
+                            } else {
+                               setCurrentPartyPhotoIndex(currentIdx);
+                               setSelectedParty(party);
+                            }
+                          }}
                         />
-                      </button>
-                    </div>
-                  )}
-                </motion.div>
-              );
-            })}
-          </AnimatePresence>
-        )}
+                        {/* Center Modal Area */}
+                        <div 
+                          className="absolute top-0 left-1/3 right-1/3 bottom-[150px] z-10 cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCurrentPartyPhotoIndex(currentIdx);
+                            setSelectedParty(party);
+                          }}
+                        />
+                        {/* Right Carousel Nav */}
+                        <div 
+                          className="absolute top-0 right-0 bottom-[150px] w-1/3 z-10 cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (photos.length > 1) {
+                               setCardPhotoIndices(prev => ({...prev, [party.ID]: Math.min(photos.length - 1, (prev[party.ID] || 0) + 1)}));
+                            } else {
+                               setCurrentPartyPhotoIndex(currentIdx);
+                               setSelectedParty(party);
+                            }
+                          }}
+                        />
+                        
+                        {/* Bottom Info Click Area to OPEN MODAL */}
+                        <div 
+                          className="absolute bottom-[0px] left-0 right-0 h-[150px] z-10 cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCurrentPartyPhotoIndex(currentIdx);
+                            setSelectedParty(party);
+                          }}
+                        />
+                      </>
+                    )}
+
+                    {/* Move action buttons inside the card to overlay directly like Tinder */}
+                    {isTop && (
+                      <div className="absolute bottom-[72px] inset-x-0 flex justify-center items-center gap-6 z-20 pointer-events-auto">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSwipe("left", party.ID);
+                          }}
+                          className="w-16 h-16 flex flex-shrink-0 items-center justify-center rounded-full bg-black/30 backdrop-blur-md border border-brand-primary/50 text-brand-primary hover:bg-brand-primary hover:text-white active:scale-90 transition-all duration-200 shadow-[0_10px_30px_rgba(0,0,0,0.4)]"
+                          aria-label="Pass"
+                        >
+                          <X size={32} strokeWidth={3} className="text-current" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSwipe("right", party.ID);
+                          }}
+                          className="w-16 h-16 flex flex-shrink-0 items-center justify-center rounded-full bg-black/30 backdrop-blur-md border border-[#00FFA3]/50 text-[#00FFA3] hover:bg-[#00FFA3] hover:text-black active:scale-90 transition-all duration-200 shadow-[0_10px_30px_rgba(0,0,0,0.4)]"
+                          aria-label="Like"
+                        >
+                          <Check
+                            size={32}
+                            strokeWidth={3}
+                            className="text-current"
+                          />
+                        </button>
+                      </div>
+                    )}
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+          )}
+        </div>
       </div>
 
       {/* Party Detail Overlay */}
@@ -416,18 +482,27 @@ export function SwipePage() {
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="absolute inset-0 bg-[#0A0B14] z-[50] flex flex-col overflow-y-auto scrollbar-hide"
+            className="absolute inset-0 z-[50] flex items-center justify-center overflow-hidden bg-black"
           >
-            <div
-              className="relative h-[75dvh] w-full overflow-hidden shrink-0"
-              onClick={() => {
-                if (selectedParty?.PartyPhotos?.length > 1) {
-                  setCurrentPartyPhotoIndex(
-                    (prev) => (prev + 1) % selectedParty.PartyPhotos.length,
-                  );
-                }
-              }}
-            >
+            <div className="w-full h-full bg-[#0A0B14] overflow-y-auto scrollbar-hide flex flex-col relative">
+              <div
+                className="relative h-[75dvh] w-full overflow-hidden shrink-0 cursor-pointer"
+                onClick={(e) => {
+                  if (selectedParty?.PartyPhotos?.length > 1) {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    if (x < rect.width / 2) {
+                       setCurrentPartyPhotoIndex(
+                         (prev) => Math.max(0, prev - 1),
+                       );
+                    } else {
+                       setCurrentPartyPhotoIndex(
+                         (prev) => Math.min(selectedParty.PartyPhotos.length - 1, prev + 1),
+                       );
+                    }
+                  }
+                }}
+              >
               <AnimatePresence mode="wait">
                 <motion.img
                   key={currentPartyPhotoIndex}
@@ -585,24 +660,8 @@ export function SwipePage() {
                   className="text-white/20 ml-auto rotate-180"
                 />
               </div>
-
-              {user && selectedParty.HostID !== user.ID && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDMWithUserId(
-                      selectedParty.HostID,
-                      selectedParty.HostName || "Host",
-                      selectedParty.HostThumbnail
-                    );
-                  }}
-                  className="w-full mt-4 py-4 rounded-[24px] bg-white text-black text-[12px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-3 active:scale-95 transition-all hover:bg-white/90"
-                >
-                  <Send size={16} />
-                  Send Message
-                </button>
-              )}
             </div>
+           </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -615,23 +674,32 @@ export function SwipePage() {
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 30, stiffness: 250 }}
-            className="absolute inset-0 bg-[#0A0B14] z-[60] flex flex-col overflow-y-auto scrollbar-hide"
+            className="absolute inset-0 z-[60] flex items-center justify-center overflow-hidden bg-black"
           >
-            <div
-              className="relative h-[550px] w-full overflow-hidden shrink-0 cursor-pointer"
-              onClick={(e) => {
-                const photos =
-                  Array.isArray(selectedUser.ProfilePhotos) &&
-                  selectedUser.ProfilePhotos.length > 0
-                    ? selectedUser.ProfilePhotos
-                    : ([selectedUser.Thumbnail].filter(Boolean) as string[]);
-                if (photos.length > 1) {
-                  setCurrentUserPhotoIndex(
-                    (prev) => (prev + 1) % photos.length,
-                  );
-                }
-              }}
-            >
+            <div className="w-full h-full bg-[#0A0B14] overflow-y-auto scrollbar-hide flex flex-col relative">
+              <div
+                className="relative h-[550px] w-full overflow-hidden shrink-0 cursor-pointer"
+                onClick={(e) => {
+                  const photos =
+                    Array.isArray(selectedUser.ProfilePhotos) &&
+                    selectedUser.ProfilePhotos.length > 0
+                      ? selectedUser.ProfilePhotos
+                      : ([selectedUser.Thumbnail].filter(Boolean) as string[]);
+                  if (photos.length > 1) {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    if (x < rect.width / 2) {
+                       setCurrentUserPhotoIndex(
+                         (prev) => Math.max(0, prev - 1),
+                       );
+                    } else {
+                       setCurrentUserPhotoIndex(
+                         (prev) => Math.min(photos.length - 1, prev + 1),
+                       );
+                    }
+                  }
+                }}
+              >
               <AnimatePresence mode="wait">
                 <motion.img
                   key={currentUserPhotoIndex}
@@ -714,7 +782,7 @@ export function SwipePage() {
             <div className="px-6 -mt-4 relative z-10 space-y-8 pb-4">
               {/* Bio */}
               <div>
-                <h3 className="text-[10px] font-bold text-white/40 tracking-wider mb-2 uppercase">
+                <h3 className="text-[10px] font-bold text-white/40 tracking-wider mb-2 uppercase pt-[30px] pl-0">
                   About Me
                 </h3>
                 <p className="text-sm text-white/80 leading-relaxed">
@@ -850,6 +918,7 @@ export function SwipePage() {
                 Send Message
               </button>
             </div>
+           </div>
           </motion.div>
         )}
       </AnimatePresence>

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { cn } from '../lib/utils';
-import { MessageSquare, MapPin, Clock, ChevronRight } from 'lucide-react';
+import { MessageSquare, MapPin, Clock, ChevronRight, Video, Image as ImageIcon } from 'lucide-react';
 import { useStore } from '../lib/Store';
 import { getAssetUrl } from '../lib/constants';
 import { useNavigate } from 'react-router-dom';
@@ -13,7 +13,7 @@ export function MessagesPage() {
   const activeChats = chats.filter((c) => activeTab === 'party' ? c.IsGroup : !c.IsGroup);
 
   return (
-    <div className="h-full w-full bg-transparent flex flex-col pt-12 pb-24">
+    <div className="h-full w-full bg-transparent flex flex-col pt-8 pb-24 overflow-y-auto scrollbar-hide">
       {/* Top Tabs */}
       <div className="px-6 flex items-center justify-center z-10 mb-8 shrink-0">
         <div className="bg-[#131522] rounded-full p-1.5 flex w-full max-w-sm border border-white/5 shadow-2xl">
@@ -109,10 +109,31 @@ export function MessagesPage() {
                                  </h4>
                                  <span className="text-[9px] font-black text-brand-accent uppercase tracking-widest">{getETA()}</span>
                               </div>
-                              <p className="text-[11px] font-medium text-white/40 truncate italic pr-4">
-                                {chat.RecentMessages?.length > 0 
-                                  ? `"${chat.RecentMessages[chat.RecentMessages.length-1].Content}"` 
-                                  : "Frequency established. Awaiting signals..."}
+                              <p className="text-[11px] font-medium text-white/40 truncate pr-4 flex items-center gap-1 min-w-0">
+                                {chat.RecentMessages?.length > 0 ? (
+                                  (() => {
+                                    const lastMsg = chat.RecentMessages[chat.RecentMessages.length - 1];
+                                    if (lastMsg.VideoUrl) {
+                                      return (
+                                        <span className="text-brand-accent font-bold flex items-center gap-1 truncate">
+                                          <Video size={12} className="shrink-0" />
+                                          <span className="truncate">VIDEO {lastMsg.Content ? `"${lastMsg.Content}"` : ""}</span>
+                                        </span>
+                                      );
+                                    }
+                                    if (lastMsg.ImageUrl) {
+                                      return (
+                                        <span className="text-brand-accent font-bold flex items-center gap-1 truncate">
+                                          <ImageIcon size={12} className="shrink-0" />
+                                          <span className="truncate">PHOTO {lastMsg.Content ? `"${lastMsg.Content}"` : ""}</span>
+                                        </span>
+                                      );
+                                    }
+                                    return <span className="truncate italic">"{lastMsg.Content}"</span>;
+                                  })()
+                                ) : (
+                                  <span className="italic">Frequency established. Awaiting signals...</span>
+                                )}
                               </p>
                            </div>
                            <ChevronRight size={18} className="text-white/10 group-hover:text-brand-accent transition-colors translate-x-0 group-hover:translate-x-1 transition-transform" />
