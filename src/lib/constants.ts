@@ -11,9 +11,10 @@ export const isCapacitor = typeof window !== 'undefined' && (
 );
 
 // Determine the base URL for API and WebSockets
-const rawAppUrl = typeof process !== 'undefined' && process.env && process.env.APP_URL 
-  ? process.env.APP_URL 
-  : 'https://ais-pre-lr54twg5655e4thhbtygne-661033979019.us-east1.run.app';
+// Use the Google development server in development, and the Render live server in production/release
+export const rawAppUrl = (import.meta as any).env?.DEV 
+  ? 'https://ais-pre-lr54twg5655e4thhbtygne-661033979019.us-east1.run.app'
+  : 'https://waterparty-react-14hr.onrender.com';
 
 // Use relative paths on standard web to avoid CORS, but use absolute URL inside Capacitor (Android/iOS)
 export const API_BASE = isCapacitor 
