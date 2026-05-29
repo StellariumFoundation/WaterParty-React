@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { Geolocation } from '@capacitor/geolocation';
+import { Capacitor } from '@capacitor/core';
 
 // Fix for default marker icon in leaflet
 const DefaultIcon = L.icon({
@@ -150,7 +151,22 @@ export function CreatePartyPage() {
     };
 
     try {
-      if (window.location.protocol !== 'file:' && !(window as any).Capacitor) {
+      const isNative = Capacitor.isNativePlatform() || (typeof window !== 'undefined' && (window as any).Capacitor);
+      if (isNative) {
+        try {
+          const status = await Geolocation.checkPermissions();
+          if (status.coarseLocation !== 'granted' && status.location !== 'granted') {
+            await Geolocation.requestPermissions();
+          }
+          const pos = await Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 5000 });
+          const newPos = new L.LatLng(pos.coords.latitude, pos.coords.longitude);
+          setMapPosition(newPos);
+          setIsLocating(false);
+        } catch (mobileErr) {
+          console.warn("Capacitor geolocation failed:", mobileErr);
+          fallbackToDefault();
+        }
+      } else {
         if ('geolocation' in navigator) {
           navigator.geolocation.getCurrentPosition(
             (pos) => {
@@ -165,17 +181,6 @@ export function CreatePartyPage() {
             { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
           );
         } else {
-          fallbackToDefault();
-        }
-      } else {
-        try {
-          await Geolocation.requestPermissions();
-          const pos = await Geolocation.getCurrentPosition();
-          const newPos = new L.LatLng(pos.coords.latitude, pos.coords.longitude);
-          setMapPosition(newPos);
-          setIsLocating(false);
-        } catch (mobileErr) {
-          console.warn("Capacitor geolocation failed:", mobileErr);
           fallbackToDefault();
         }
       }

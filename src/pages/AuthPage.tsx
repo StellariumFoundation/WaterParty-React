@@ -3,6 +3,7 @@ import { useStore } from '../lib/Store';
 import { API_BASE } from '../lib/constants';
 import { Waves, Mail, Lock, User as UserIcon, Camera, PenTool, X, Plus } from 'lucide-react';
 import { Geolocation } from '@capacitor/geolocation';
+import { Capacitor } from '@capacitor/core';
 import { compressImage } from '../lib/utils';
 
 export function AuthPage() {
@@ -91,12 +92,28 @@ export function AuthPage() {
       
       if (!res.ok) throw new Error(data?.error || data?.message || 'Request failed');
       
-      // Request location using Capacitor plugin before finalizing login
+      // Request location using Capacitor/browser before finalizing login
       try {
-        await Geolocation.requestPermissions();
-        await Geolocation.getCurrentPosition();
+        const isNative = Capacitor.isNativePlatform() || (typeof window !== 'undefined' && (window as any).Capacitor);
+        if (isNative) {
+          const status = await Geolocation.checkPermissions();
+          if (status.coarseLocation !== 'granted' && status.location !== 'granted') {
+            await Geolocation.requestPermissions();
+          }
+          await Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 5000 });
+        } else {
+          if ('geolocation' in navigator) {
+            await new Promise<void>((resolve) => {
+              navigator.geolocation.getCurrentPosition(
+                () => resolve(),
+                () => resolve(),
+                { timeout: 5000 }
+              );
+            });
+          }
+        }
       } catch (e) {
-        console.warn("Location permission denied or unavailable, proceeding with default location.");
+        console.warn("Location permission denied or unavailable, proceeding with default location.", e);
       }
       login(data);
 

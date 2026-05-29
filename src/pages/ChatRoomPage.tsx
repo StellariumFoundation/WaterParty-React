@@ -24,6 +24,9 @@ import { motion, AnimatePresence } from "motion/react";
 import { cn, compressImage } from "../lib/utils";
 import { useStore } from "../lib/Store";
 import { getAssetUrl, API_BASE } from "../lib/constants";
+import { Capacitor } from '@capacitor/core';
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 
 // Since we don't have a real chat message event on server yet,
 // we'll mock the active chat experience but allow sending
@@ -222,17 +225,41 @@ export function ChatRoomPage() {
     reader.onloadend = async () => {
       if (reader.result) {
         try {
-          if (isVideo) {
-            setSelectedVideo(reader.result as string);
-            setSelectedImage(null);
+          let base64ToUpload = reader.result as string;
+          if (!isVideo) {
+            base64ToUpload = await compressImage(reader.result as string, 1000, 1000, 0.7);
+          }
+
+          const uploadRes = await fetch(`${API_BASE}/api/upload`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              fileData: base64ToUpload,
+              fileName: file.name
+            })
+          });
+
+          if (!uploadRes.ok) {
+            throw new Error("Server upload rejected.");
+          }
+
+          const uploadData = await uploadRes.json();
+          if (uploadData && uploadData.url) {
+            if (isVideo) {
+              setSelectedVideo(uploadData.url);
+              setSelectedImage(null);
+            } else {
+              setSelectedImage(uploadData.url);
+              setSelectedVideo(null);
+            }
           } else {
-            const compressed = await compressImage(reader.result as string, 1000, 1000, 0.7);
-            setSelectedImage(compressed);
-            setSelectedVideo(null);
+            throw new Error("Invalid response from server.");
           }
         } catch (err) {
-          console.error("Processing failed:", err);
-          setUploadError("Could not read media file.");
+          console.error("Processing or network upload failed:", err);
+          setUploadError("Could not upload media to server storage.");
         }
       }
       setUploadingImage(false);
@@ -243,22 +270,60 @@ export function ChatRoomPage() {
   const handleDownloadMedia = async (url: string, isVideo: boolean = false) => {
     const ext = isVideo ? "mp4" : "png";
     const prefix = isVideo ? "shared-video" : "shared-image";
+    const fileName = `${prefix}-${Date.now()}.${ext}`;
+
     try {
-      const response = await fetch(url);
+      const isNative = Capacitor.isNativePlatform() || (typeof window !== 'undefined' && (window as any).Capacitor);
+      
+      if (isNative) {
+        try {
+          let savedFileUri = "";
+          
+          if (url.startsWith('data:')) {
+            const base64Data = url.split(',')[1];
+            const result = await Filesystem.writeFile({
+              path: fileName,
+              data: base64Data,
+              directory: Directory.Cache,
+            });
+            savedFileUri = result.uri;
+          } else {
+             const result = await Filesystem.downloadFile({
+                url: url,
+                path: fileName,
+                directory: Directory.Cache,
+             });
+             savedFileUri = result.path || result.uri;
+          }
+          
+          if (savedFileUri) {
+            await Share.share({
+              title: fileName,
+              url: savedFileUri,
+              dialogTitle: 'Save or Share'
+            });
+          }
+          return;
+        } catch (mobileErr) {
+          console.warn("Mobile download/share failed, falling back to web:", mobileErr);
+        }
+      }
+
+      const response = await fetch(url.startsWith('http') ? url : getAssetUrl(url));
       const blob = await response.blob();
       const blobUrl = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = blobUrl;
-      link.download = `${prefix}-${Date.now()}.${ext}`;
+      link.download = fileName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(blobUrl);
     } catch (err) {
       const link = document.createElement("a");
-      link.href = url;
+      link.href = url.startsWith('http') ? url : getAssetUrl(url);
       link.target = "_blank";
-      link.download = `${prefix}-${Date.now()}.${ext}`;
+      link.download = fileName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -1813,7 +1878,7 @@ export function ChatRoomPage() {
           <div className="relative self-start ml-2 mb-1 p-1 bg-white/5 border border-white/10 rounded-2xl flex items-center gap-2 max-w-full">
             <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-black/40 border border-white/10 shrink-0">
               <img
-                src={selectedImage}
+                src={getAssetUrl(selectedImage)}
                 alt="Selected preview"
                 className="w-full h-full object-cover"
               />
@@ -1849,7 +1914,7 @@ export function ChatRoomPage() {
           <div className="relative self-start ml-2 mb-1 p-1 bg-white/5 border border-white/10 rounded-2xl flex items-center gap-2 max-w-full">
             <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-black/40 border border-white/10 shrink-0">
               <video
-                src={selectedVideo}
+                src={getAssetUrl(selectedVideo)}
                 className="w-full h-full object-cover"
               />
               {uploadingImage && (

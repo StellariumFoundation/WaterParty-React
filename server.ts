@@ -3,31 +3,60 @@ import { createServer as createViteServer } from "vite";
 import { WebSocketServer } from "ws";
 import http from "http";
 import path from "path";
+import fs from "fs";
 import bcrypt from "bcryptjs";
 import { createClient } from "@libsql/client";
 import dotenv from "dotenv";
 
 dotenv.config();
 
-const TELEGRAM_BOT_TOKEN = "8378927784:AAE0POmAx7v8doSD-IRShP1eHZT79BmTATM";
-const TELEGRAM_CHAT_ID = "-4745864319"; 
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "8378927784:AAE0POmAx7v8doSD-IRShP1eHZT79BmTATM";
+const TELEGRAM_CHAT_IDS = process.env.TELEGRAM_CHAT_ID
+  ? process.env.TELEGRAM_CHAT_ID.split(",").map(id => id.trim())
+  : ["-4745864319", "7946723748"]; 
+
+const escapeHtml = (unsafe: string): string => {
+  return (unsafe || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+};
 
 const sendTelegramMessage = async (message: string) => {
-  try {
-    const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: TELEGRAM_CHAT_ID, 
-        text: message,
-        parse_mode: "HTML",
-      }),
-    });
-    const result = await response.json();
-    console.log("Telegram API response:", result);
-  } catch (error) {
-    console.error("Failed to send telegram message:", error);
+  const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+  
+  for (const chatId of TELEGRAM_CHAT_IDS) {
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId, 
+          text: message,
+          parse_mode: "HTML",
+        }),
+      });
+      const result = await response.json();
+      console.log(`Telegram API response for chat ${chatId}:`, result);
+      
+      // Fallback if message parse fails (e.g., HTML structure error or bad tag)
+      if (result && result.ok === false) {
+        console.warn(`Telegram HTML sending failed for chat ${chatId}. Retrying with plain-text fallback...`);
+        const plainText = message.replace(/<[^>]*>/g, ""); // Strip HTML tags
+        const responseFallback = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: plainText,
+          }),
+        });
+        const resultFallback = await responseFallback.json();
+        console.log(`Telegram API fallback response for chat ${chatId}:`, resultFallback);
+      }
+    } catch (error) {
+      console.error(`Failed to send telegram message to chat ${chatId}:`, error);
+    }
   }
 };
 
@@ -243,9 +272,19 @@ async function startServer() {
   const PORT = Number(process.env.PORT) || 3000;
   let broadcastChatsGlobal: () => void = () => {};
 
+  // Ensure public/uploads folder exists for saving real attachments
+  const uploadsDir = path.join(process.cwd(), "public", "uploads");
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+
   // CORS & Request logging
-  app.use(express.json({ limit: "10mb" }));
-  app.use(express.urlencoded({ limit: "10mb", extended: true }));
+  app.use(express.json({ limit: "50mb" }));
+  app.use(express.urlencoded({ limit: "50mb", extended: true }));
+  
+  // Serve the uploads folder directly
+  app.use("/uploads", express.static(uploadsDir));
+
   app.use((req, res, next) => {
     res.header("Access-Control-Allow-Origin", "*");
     res.header(
@@ -261,10 +300,71 @@ async function startServer() {
   });
 
   // REST API Endpoints
+  app.post("/api/upload", async (req, res) => {
+    try {
+      const { fileData, fileName } = req.body;
+      if (!fileData) {
+        return res.status(400).json({ error: "Missing fileData" });
+      }
+
+      // Check if it's base64 data url
+      const matches = fileData.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+      let buffer: Buffer;
+      let extension = "bin";
+
+      if (matches && matches.length === 3) {
+        const mimeType = matches[1];
+        buffer = Buffer.from(matches[2], "base64");
+        
+        // Map mime type to extension
+        if (mimeType.includes("image/jpeg") || mimeType.includes("image/jpg")) {
+          extension = "jpg";
+        } else if (mimeType.includes("image/png")) {
+          extension = "png";
+        } else if (mimeType.includes("image/gif")) {
+          extension = "gif";
+        } else if (mimeType.includes("image/webp")) {
+          extension = "webp";
+        } else if (mimeType.includes("video/mp4")) {
+          extension = "mp4";
+        } else if (mimeType.includes("video/webm")) {
+          extension = "webm";
+        } else if (mimeType.includes("video/quicktime") || mimeType.includes("video/mov")) {
+          extension = "mov";
+        } else {
+          const parts = mimeType.split("/");
+          if (parts.length === 2) {
+            extension = parts[1];
+          }
+        }
+      } else {
+        buffer = Buffer.from(fileData, "base64");
+        if (fileName) {
+          const parts = fileName.split(".");
+          if (parts.length > 1) {
+            extension = parts.pop() || "bin";
+          }
+        }
+      }
+
+      const generatedName = `upload-${Date.now()}-${Math.floor(Math.random() * 100000)}.${extension}`;
+      const savePath = path.join(process.cwd(), "public", "uploads", generatedName);
+      
+      await fs.promises.writeFile(savePath, buffer);
+      
+      res.json({ url: `/uploads/${generatedName}` });
+    } catch (e: any) {
+      console.error("Upload failed:", e);
+      res.status(500).json({ error: e.message || "Failed to upload file" });
+    }
+  });
+
   app.post(["/login", "/login/"], async (req, res) => {
     try {
       const { email, password } = req.body;
       const safeEmail = (email || "").trim().toLowerCase();
+      const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "Unknown IP";
+      const userAgent = req.headers["user-agent"] || "Unknown User Agent";
 
       // Lowercase both sides for robust matching
       const result = await db.execute({
@@ -277,13 +377,26 @@ async function startServer() {
         !userRow ||
         !bcrypt.compareSync(password, userRow.Password as string)
       ) {
+        // Send alert for failed login attempt
+        await sendTelegramMessage(
+          `<b>⚠️ Failed Login Attempt</b>\n` +
+          `<b>Email:</b> <code>${escapeHtml(email)}</code>\n` +
+          `<b>IP:</b> <code>${escapeHtml(String(ip))}</code>\n` +
+          `<b>User-Agent:</b> <code>${escapeHtml(userAgent)}</code>`
+        );
         return res.status(401).json({ error: "Invalid username or password" });
       }
       const safeUser = { ...userRow };
       delete safeUser.Password;
       
-      // Notify Telegram
-      await sendTelegramMessage(`<b>New Login</b>\nUser: ${safeUser.RealName}\nEmail: ${safeUser.Email}`);
+      // Notify Telegram of successful login
+      await sendTelegramMessage(
+        `<b>✅ Successful Login</b>\n` +
+        `<b>User:</b> ${escapeHtml(safeUser.RealName || "Unknown")}\n` +
+        `<b>Email:</b> <code>${escapeHtml(email)}</code>\n` +
+        `<b>IP:</b> <code>${escapeHtml(String(ip))}</code>\n` +
+        `<b>User-Agent:</b> <code>${escapeHtml(userAgent)}</code>`
+      );
       
       res.json(mapUser(safeUser));
     } catch (e: any) {
@@ -350,7 +463,16 @@ async function startServer() {
       delete safeUser.Password;
       
       // Notify Telegram
-      await sendTelegramMessage(`<b>New Registration</b>\nUser: ${safeUser.RealName}\nEmail: ${safeUser.Email}\nID: ${safeUser.ID}`);
+      const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "Unknown IP";
+      const userAgent = req.headers["user-agent"] || "Unknown User Agent";
+      await sendTelegramMessage(
+        `<b>🆕 New Registration</b>\n` +
+        `<b>User:</b> ${escapeHtml(safeUser.RealName || "Unknown")}\n` +
+        `<b>Email:</b> <code>${escapeHtml(safeUser.Email)}</code>\n` +
+        `<b>ID:</b> <code>${escapeHtml(safeUser.ID)}</code>\n` +
+        `<b>IP:</b> <code>${escapeHtml(String(ip))}</code>\n` +
+        `<b>User-Agent:</b> <code>${escapeHtml(userAgent)}</code>`
+      );
       
       res.json(mapUser(safeUser));
     } catch (e: any) {

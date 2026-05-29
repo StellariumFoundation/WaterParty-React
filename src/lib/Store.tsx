@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { User, Party, ChatRoom } from './types';
 import { WS_BASE, API_BASE } from './constants';
 import { Geolocation } from '@capacitor/geolocation';
+import { Capacitor } from '@capacitor/core';
 
 interface StoreContextType {
   user: User | null;
@@ -52,7 +53,20 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
 
   const refreshLocation = async (onSuccess?: (coords: { lat: number; lon: number }) => void) => {
     try {
-      if (window.location.protocol !== 'file:' && !(window as any).Capacitor) {
+      const isNative = Capacitor.isNativePlatform() || (typeof window !== 'undefined' && (window as any).Capacitor);
+      if (isNative) {
+        const status = await Geolocation.checkPermissions();
+        if (status.coarseLocation !== 'granted' && status.location !== 'granted') {
+          await Geolocation.requestPermissions();
+        }
+        const pos = await Geolocation.getCurrentPosition({
+          enableHighAccuracy: true,
+          timeout: 10000
+        });
+        const newCoords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+        setCoords(newCoords);
+        if (onSuccess) onSuccess(newCoords);
+      } else {
         if ('geolocation' in navigator) {
           navigator.geolocation.getCurrentPosition((pos) => {
             const newCoords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
@@ -60,17 +74,20 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
             if (onSuccess) onSuccess(newCoords);
           }, (error) => {
             console.error("Browser location error:", error);
-          });
+          }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
         }
-      } else {
-        await Geolocation.requestPermissions();
-        const pos = await Geolocation.getCurrentPosition();
-        const newCoords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-        setCoords(newCoords);
-        if (onSuccess) onSuccess(newCoords);
       }
     } catch (e) {
-      console.warn("Location permission denied or unavailable:", e);
+      console.warn("Location permission denied or unavailable, trying browser fallback:", e);
+      if (typeof navigator !== 'undefined' && 'geolocation' in navigator) {
+        navigator.geolocation.getCurrentPosition((pos) => {
+          const newCoords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+          setCoords(newCoords);
+          if (onSuccess) onSuccess(newCoords);
+        }, (err) => {
+          console.warn("Standard browser location request failed as fallback:", err);
+        });
+      }
     }
   };
 
