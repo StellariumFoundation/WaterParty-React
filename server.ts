@@ -250,9 +250,9 @@ async function startServer() {
     res.header("Access-Control-Allow-Origin", "*");
     res.header(
       "Access-Control-Allow-Headers",
-      "Origin, X-Requested-With, Content-Type, Accept, Authorization",
+      "Origin, X-Requested-With, Content-Type, Accept, Authorization, x-user-id, X-User-Id",
     );
-    res.header("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+    res.header("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE, PATCH");
     if (req.method === "OPTIONS") {
       return res.sendStatus(200);
     }

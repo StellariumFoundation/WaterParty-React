@@ -108,25 +108,54 @@ export function AuthPage() {
   };
 
   return (
-    <div className="min-h-[100dvh] w-full flex flex-col items-center justify-center p-6 bg-gradient-to-br from-[#1e1b4b] to-[#0f172a] text-white absolute inset-0 z-[100] overflow-y-auto">
+    <div 
+      className="min-h-[100dvh] w-full flex flex-col items-center justify-center p-6 text-white absolute inset-0 z-[100] overflow-y-auto bg-cover bg-center bg-no-repeat"
+      style={{ 
+        backgroundImage: "url('/branding.jpg')",
+        backgroundColor: "#06070D"
+      }}
+    >
+      {/* Immersive backdrop blend/overlay */}
+      <div className="absolute inset-0 bg-[#06070D]/85 backdrop-blur-[10px] z-0" />
+      
       {/* Background Premium Ambient Glows */}
-      <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-brand-accent/15 blur-[120px] pointer-events-none animate-pulse" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-brand-secondary/15 blur-[120px] pointer-events-none animate-pulse" />
+      <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-brand-accent/10 blur-[120px] pointer-events-none animate-pulse z-0" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-brand-secondary/10 blur-[120px] pointer-events-none animate-pulse z-0" />
       
       <div className="w-full max-w-md my-8 flex flex-col items-center relative z-10">
         
         {/* Minimalized Logo & Header */}
-        <div className="flex items-center gap-2 mb-4 select-none animate-fadeIn">
-          <div className={`${isLogin ? 'w-8 h-8 rounded-xl' : 'w-10 h-10 rounded-2xl'} bg-gradient-to-tr from-brand-accent to-brand-secondary flex items-center justify-center shadow-lg transition-all`}>
-            <Waves size={isLogin ? 16 : 20} className="text-white" />
+        <div className="flex flex-col items-center gap-3 mb-6 select-none animate-fadeIn">
+          <div className="relative group">
+            <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-brand-accent to-brand-secondary blur-md opacity-60 group-hover:opacity-100 transition-opacity duration-300" />
+            <img 
+              src="/icon.png" 
+              alt="WaterParty Icon" 
+              className="relative w-24 h-24 rounded-2xl object-cover hover:scale-105 transition-transform duration-300 shadow-xl border border-white/10"
+              referrerPolicy="no-referrer"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+                const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                if (fallback) {
+                  fallback.style.display = 'flex';
+                }
+              }}
+            />
+            {/* Fallback wave icon container if icon.png layout fails or is empty */}
+            <div 
+              style={{ display: 'none' }}
+              className="w-24 h-24 rounded-2xl bg-gradient-to-tr from-brand-accent to-brand-secondary flex-col items-center justify-center shadow-lg border border-white/10"
+            >
+              <Waves size={40} className="text-white animate-pulse" />
+            </div>
           </div>
-          <h1 className={`${isLogin ? 'text-lg' : 'text-2xl'} font-black tracking-[0.2em] uppercase bg-gradient-to-r from-white to-white/80 bg-clip-text text-transparent transition-all`}>
+          <h1 className="text-2xl font-black tracking-[0.25em] uppercase text-white drop-shadow-md">
             WaterParty
           </h1>
         </div>
 
         {/* Elegant Form Card */}
-        <div className={`w-full bg-[#11131F]/80 backdrop-blur-2xl border border-white/10 ${isLogin ? 'rounded-2xl p-4 shadow-[0_12px_32px_rgba(0,0,0,0.5)]' : 'rounded-2xl p-5 shadow-[0_16px_40px_rgba(0,0,0,0.5)]'} transition-all`}>
+        <div className={`w-full bg-[#11131F]/90 backdrop-blur-2xl border border-white/10 ${isLogin ? 'rounded-2xl p-4 shadow-[0_12px_32px_rgba(0,0,0,0.5)]' : 'rounded-2xl p-5 shadow-[0_16px_40px_rgba(0,0,0,0.5)]'} transition-all`}>
           <h2 className="text-[9px] font-black uppercase tracking-[0.25em] mb-4 text-center text-white/50">
             {isLogin ? "Sign In" : "Registration Hub"}
           </h2>
