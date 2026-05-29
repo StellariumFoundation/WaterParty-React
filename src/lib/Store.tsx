@@ -9,6 +9,7 @@ interface StoreContextType {
   feed: Party[];
   chats: ChatRoom[];
   registrations: any[];
+  fetchedParties: Record<string, any>;
   coords: { lat: number; lon: number } | null;
   login: (u: User) => void;
   logout: () => void;
@@ -16,6 +17,7 @@ interface StoreContextType {
   removeFromFeed: (id: string) => void;
   refreshLocation: (onSuccess?: (coords: { lat: number; lon: number }) => void) => void;
   addLocalChat: (chat: ChatRoom) => void;
+  fetchPartyById: (id: string) => void;
 }
 
 const StoreContext = createContext<StoreContextType | null>(null);
@@ -25,6 +27,7 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
   const [feed, setFeed] = useState<Party[]>([]);
   const [chats, setChats] = useState<ChatRoom[]>([]);
   const [registrations, setRegistrations] = useState<any[]>([]);
+  const [fetchedParties, setFetchedParties] = useState<Record<string, any>>({});
   const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const messageQueueRef = useRef<{ event: string; payload: any }[]>([]);
@@ -34,6 +37,18 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     navigate.current = navTrigger;
   }, [navTrigger]);
+
+  const fetchPartyById = (id: string) => {
+    if (fetchedParties[id]) return;
+    fetch(`${API_BASE}/api/party/${id}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) {
+          setFetchedParties(prev => ({ ...prev, [id]: data }));
+        }
+      })
+      .catch((err) => console.error("Party fetch failed for", id, err));
+  };
 
   const refreshLocation = async (onSuccess?: (coords: { lat: number; lon: number }) => void) => {
     try {
@@ -140,6 +155,8 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
            } else if (data.Event === 'PROFILE_UPDATED') {
              setUser(data.Payload);
              localStorage.setItem('waterparty_user', JSON.stringify(data.Payload));
+           } else if (data.Event === 'PARTY_CREATED') {
+             setFeed(prev => [...prev, data.Payload]);
            } else if (data.Event === 'REGISTRATIONS_LIST') {
              setRegistrations(data.Payload || []);
            } else if (data.Event === 'DM_CREATED') {
@@ -207,7 +224,7 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <StoreContext.Provider value={{ user, feed, chats, registrations, coords, login, logout, sendSocketMessage, removeFromFeed, refreshLocation, addLocalChat }}>
+    <StoreContext.Provider value={{ user, feed, chats, registrations, fetchedParties, coords, login, logout, sendSocketMessage, removeFromFeed, refreshLocation, fetchPartyById, addLocalChat }}>
       {children}
     </StoreContext.Provider>
   )

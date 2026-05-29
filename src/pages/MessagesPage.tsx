@@ -1,16 +1,26 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { cn } from '../lib/utils';
 import { MessageSquare, MapPin, Clock, ChevronRight, Video, Image as ImageIcon } from 'lucide-react';
 import { useStore } from '../lib/Store';
-import { getAssetUrl } from '../lib/constants';
+import { getAssetUrl, API_BASE } from '../lib/constants';
 import { useNavigate } from 'react-router-dom';
 
 export function MessagesPage() {
   const [activeTab, setActiveTab] = useState<'party' | 'direct'>('party');
-  const { chats, feed } = useStore();
+  const { chats, feed, fetchedParties, fetchPartyById } = useStore();
   const navigate = useNavigate();
 
   const activeChats = chats.filter((c) => activeTab === 'party' ? c.IsGroup : !c.IsGroup);
+
+  useEffect(() => {
+    const missingPartyIds = activeChats
+      .map(c => c.PartyID)
+      .filter(id => id && id !== 'DM' && !feed.find(p => p.ID === id) && !fetchedParties[id]);
+
+    missingPartyIds.forEach(id => {
+       fetchPartyById(id);
+    });
+  }, [activeChats, feed]);
 
   return (
     <div className="h-full w-full bg-transparent flex flex-col pt-8 pb-24 overflow-y-auto scrollbar-hide">
@@ -60,7 +70,11 @@ export function MessagesPage() {
                   const displayImage = chat.ImageUrl ? getAssetUrl(chat.ImageUrl) : "https://images.unsplash.com/photo-1542382103-6fdb3a652d8e?q=80&w=800&auto=format&fit=crop";
                   
                   // Find associated party for extra details
-                  const associatedParty = feed.find(p => p.ID === chat.PartyID);
+                  const associatedParty = feed.find(p => p.ID === chat.PartyID) || fetchedParties[chat.PartyID];
+                  
+                  if (chat.PartyID && chat.PartyID !== 'DM' && !associatedParty) {
+                      console.log("Associated party not found for chat:", chat.Title, chat.PartyID);
+                  }
                   
                   const getETA = () => {
                     if (!chat.IsGroup) return 'DIRECT';

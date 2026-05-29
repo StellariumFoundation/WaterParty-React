@@ -368,7 +368,7 @@ export function SwipePage() {
                               Hosted By
                             </span>
                             <span className="text-xs font-black text-white uppercase tracking-wider">
-                              {party.HostName || party.HostID?.slice(0, 6)}
+                              {(!party.HostName || party.HostName.toLowerCase() === "unknown") ? "The Stellar Foundation" : party.HostName}
                             </span>
                           </div>
                         </div>
@@ -556,8 +556,7 @@ export function SwipePage() {
                   <span className="w-2 h-2 rounded-full bg-[#00FFA3] inline-block shadow-[0_0_8px_rgba(0,255,163,0.8)]" />
                   <p className="text-sm font-bold text-white uppercase tracking-widest drop-shadow-md">
                     Host •{" "}
-                    {selectedParty.HostName ||
-                      selectedParty.HostID?.slice(0, 6)}
+                    {(!selectedParty.HostName || selectedParty.HostName.toLowerCase() === "unknown") ? "The Stellar Foundation" : selectedParty.HostName}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -652,7 +651,7 @@ export function SwipePage() {
                     Hosted By
                   </p>
                   <p className="text-sm font-bold text-white tracking-tight">
-                    {selectedParty.HostName || "Unknown"}
+                    {(!selectedParty.HostName || selectedParty.HostName.toLowerCase() === "unknown") ? "The Stellar Foundation" : selectedParty.HostName}
                   </p>
                 </div>
                 <ChevronLeft

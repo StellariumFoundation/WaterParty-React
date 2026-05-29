@@ -114,7 +114,7 @@ async function getEnrichedParties() {
     });
     const hostData = hostResult.rows[0] as any;
     if (hostData) {
-      p.HostName = hostData.RealName || "";
+      p.HostName = (!hostData.RealName || hostData.RealName.toLowerCase() === "unknown") ? "The Stellar Foundation" : hostData.RealName;
       p.HostThumbnail =
         hostData.Thumbnail || parseJSON(hostData.ProfilePhotos)?.[0] || "";
     }
@@ -137,7 +137,7 @@ async function getEnrichedChats(userID: string) {
         });
         const other = otherResult.rows[0] as any;
         if (other) {
-          chat.Title = other.RealName || chat.Title;
+          chat.Title = (!other.RealName || other.RealName.toLowerCase() === "unknown") ? "The Stellar Foundation" : other.RealName;
           chat.ImageUrl =
             other.Thumbnail ||
             parseJSON(other.ProfilePhotos)?.[0] ||
@@ -469,7 +469,7 @@ async function startServer() {
           args: [
             chatID,
             "DM",
-            `${me.RealName} & ${other.RealName}`,
+            `${(!me.RealName || me.RealName.toLowerCase() === "unknown") ? "The Stellar Foundation" : me.RealName} & ${(!other.RealName || other.RealName.toLowerCase() === "unknown") ? "The Stellar Foundation" : other.RealName}`,
             "",
             JSON.stringify([]),
             0,
@@ -498,6 +498,21 @@ async function startServer() {
       const safeUser = { ...userRow };
       delete safeUser.Password;
       res.json(mapUser(safeUser));
+    } catch (e: any) {
+      console.error(e);
+      res.status(500).json({ error: e.message || "Internal server error" });
+    }
+  });
+
+  app.get(["/api/party/:id", "/api/party/:id/"], async (req, res) => {
+    try {
+      const result = await db.execute({
+        sql: "SELECT * FROM parties WHERE ID = ?",
+        args: [req.params.id],
+      });
+      const partyRow = result.rows[0] as any;
+      if (!partyRow) return res.status(404).json({ error: "Party not found" });
+      res.json(mapParty(partyRow));
     } catch (e: any) {
       console.error(e);
       res.status(500).json({ error: e.message || "Internal server error" });
@@ -946,7 +961,7 @@ async function startServer() {
                   args: [
                     chatID,
                     "DM",
-                    `${me.RealName} & ${other.RealName}`,
+                    `${(!me.RealName || me.RealName.toLowerCase() === "unknown") ? "The Stellar Foundation" : me.RealName} & ${(!other.RealName || other.RealName.toLowerCase() === "unknown") ? "The Stellar Foundation" : other.RealName}`,
                     "",
                     JSON.stringify([]),
                     0,

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import {
   Send,
   ChevronLeft,
+  ChevronRight,
   Info,
   Calendar,
   MapPin,
@@ -29,7 +30,7 @@ import { getAssetUrl, API_BASE } from "../lib/constants";
 export function ChatRoomPage() {
   const { chatId } = useParams();
   const navigate = useNavigate();
-  const { chats, user, sendSocketMessage, feed, registrations, addLocalChat } = useStore();
+  const { chats, user, sendSocketMessage, feed, registrations, addLocalChat, fetchedParties, fetchPartyById } = useStore();
   const [message, setMessage] = useState("");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
@@ -41,7 +42,9 @@ export function ChatRoomPage() {
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
   const [otherUser, setOtherUser] = useState<any | null>(null);
-  const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
+  const [partyPhotoIndex, setPartyPhotoIndex] = useState(0);
+  const [otherUserPhotoIndex, setOtherUserPhotoIndex] = useState(0);
+  const [selectedUserPhotoIndex, setSelectedUserPhotoIndex] = useState(0);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [lightboxVideo, setLightboxVideo] = useState<string | null>(null);
   const [showReportModal, setShowReportModal] = useState(false);
@@ -81,7 +84,14 @@ export function ChatRoomPage() {
   }, [chats, chatId, user]);
 
   const chat = chats.find((c) => c.ID === chatId) || localChat;
-  const associatedParty = feed.find((p) => p.ID === chat?.PartyID);
+  const associatedParty = feed.find((p) => p.ID === chat?.PartyID) || (chat?.PartyID ? fetchedParties[chat.PartyID] : null);
+  
+  useEffect(() => {
+    if (chat?.PartyID && chat.PartyID !== 'DM' && !feed.find(p => p.ID === chat.PartyID)) {
+      fetchPartyById(chat.PartyID);
+    }
+  }, [chat?.PartyID, feed]);
+
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const isHost = associatedParty?.HostID === user?.ID;
@@ -110,7 +120,9 @@ export function ChatRoomPage() {
     setIsConfirmingDelete(false);
     setSelectedUser(null);
     setOtherUser(null);
-    setCurrentPhotoIndex(0);
+    setPartyPhotoIndex(0);
+    setOtherUserPhotoIndex(0);
+    setSelectedUserPhotoIndex(0);
     setMessage("");
   }, [chatId]);
 
@@ -326,7 +338,7 @@ export function ChatRoomPage() {
 
     if (existingChat) {
       setSelectedUser(null);
-      setCurrentPhotoIndex(0);
+      setSelectedUserPhotoIndex(0);
       navigate(`/chat/${existingChat.ID}`);
     } else {
       try {
@@ -355,7 +367,7 @@ export function ChatRoomPage() {
             });
             sendSocketMessage("GET_CHATS", {});
             setSelectedUser(null);
-            setCurrentPhotoIndex(0);
+            setSelectedUserPhotoIndex(0);
             navigate(`/chat/${data.ChatID}`);
           }
         }
@@ -609,29 +621,42 @@ export function ChatRoomPage() {
                   {associatedParty?.PartyPhotos &&
                     associatedParty.PartyPhotos.length > 0 && (
                       <div
-                        className="relative h-[75dvh] w-full overflow-hidden shrink-0 cursor-pointer"
-                        onClick={() => {
-                          if (associatedParty.PartyPhotos.length > 1) {
-                            setCurrentPhotoIndex(
-                              (prev) =>
-                                (prev + 1) %
-                                associatedParty.PartyPhotos.length,
-                            );
-                          }
-                        }}
+                        className="relative h-[75dvh] w-full overflow-hidden shrink-0"
                       >
+                        {associatedParty.PartyPhotos.length > 1 && (
+                          <>
+                            <button
+                              className="absolute left-4 top-1/2 -translate-y-1/2 z-30 p-2 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPartyPhotoIndex(prev => (prev - 1 + associatedParty.PartyPhotos.length) % associatedParty.PartyPhotos.length);
+                              }}
+                            >
+                              <ChevronLeft size={20} />
+                            </button>
+                            <button
+                              className="absolute right-4 top-1/2 -translate-y-1/2 z-30 p-2 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPartyPhotoIndex(prev => (prev + 1) % associatedParty.PartyPhotos.length);
+                              }}
+                            >
+                              <ChevronRight size={20} />
+                            </button>
+                          </>
+                        )}
                         <AnimatePresence mode="wait">
                           <motion.img
-                            key={currentPhotoIndex}
+                            key={partyPhotoIndex}
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
                             transition={{ duration: 0.3 }}
                             src={getAssetUrl(
-                              associatedParty.PartyPhotos[currentPhotoIndex] ||
+                              associatedParty.PartyPhotos[partyPhotoIndex] ||
                                 "",
                             )}
-                            className="absolute inset-0 w-full h-full object-cover"
+                            className="absolute inset-0 w-full h-full object-contain"
                           />
                         </AnimatePresence>
 
@@ -644,7 +669,7 @@ export function ChatRoomPage() {
                                   key={i}
                                   className={cn(
                                     "h-1 flex-1 rounded-full transition-all duration-300",
-                                    i === currentPhotoIndex
+                                    i === partyPhotoIndex
                                       ? "bg-brand-accent shadow-[0_0_8px_rgba(0,210,255,0.6)]"
                                       : "bg-white/20",
                                   )}
@@ -660,7 +685,7 @@ export function ChatRoomPage() {
                           onClick={(e) => {
                             e.stopPropagation();
                             setShowInfo(false);
-                            setCurrentPhotoIndex(0);
+                            setPartyPhotoIndex(0);
                           }}
                           className="absolute top-8 right-6 w-10 h-10 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white/70 hover:text-white transition-colors border border-white/10 z-10"
                         >
@@ -747,7 +772,7 @@ export function ChatRoomPage() {
                       </p>
                     </div>
 
-                    {associatedParty && (
+                    {associatedParty && !isHost && (
                       <div
                         onClick={() => handleUserClick(associatedParty.HostID)}
                         className="bg-[#11131F] border border-white/5 rounded-2xl p-4 flex items-center gap-3 cursor-pointer hover:bg-white/5 transition-colors active:scale-95"
@@ -765,7 +790,7 @@ export function ChatRoomPage() {
                             Hosted By
                           </p>
                           <p className="text-sm font-bold text-white tracking-tight">
-                            {associatedParty.HostName || "Unknown"}
+                            {(!associatedParty.HostName || associatedParty.HostName.toLowerCase() === "unknown") ? "The Stellar Foundation" : associatedParty.HostName}
                           </p>
                         </div>
                         <ChevronLeft
@@ -782,7 +807,7 @@ export function ChatRoomPage() {
                           if (!user || !associatedParty.HostID) return;
                           
                           const targetUserId = associatedParty.HostID;
-                          const targetName = associatedParty.HostName || "Host";
+                          const targetName = (!associatedParty.HostName || associatedParty.HostName.toLowerCase() === "unknown") ? "The Stellar Foundation" : associatedParty.HostName;
                           const targetThumbnail = associatedParty.HostThumbnail;
 
                           const existingChat = chats.find(
@@ -874,46 +899,60 @@ export function ChatRoomPage() {
                   </div>
                 </>
               ) : (
-                <div className="flex flex-col flex-1">
+                <div className="flex flex-col flex-1 overflow-y-auto scrollbar-hide">
                   {otherUser ? (
-                    <>
-                      <div className="relative h-96 w-full shrink-0 group">
-                        <div
-                          className="w-full h-full flex overflow-x-auto snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                          onScroll={(e) => {
-                            const idx = Math.round(
-                              e.currentTarget.scrollLeft /
-                                e.currentTarget.offsetWidth,
-                            );
-                            setCurrentPhotoIndex(idx);
-                          }}
-                        >
-                          {(otherUser.ProfilePhotos?.length > 0
-                            ? otherUser.ProfilePhotos
-                            : [otherUser.Thumbnail || ""]
-                          )
-                            .filter(Boolean)
-                            .map((photo: string, idx: number) => (
-                              <div
-                                key={idx}
-                                className="w-full h-full flex-none snap-center relative"
-                              >
-                                <img
-                                  src={
-                                    getAssetUrl(photo) ||
-                                    "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=800"
-                                  }
-                                  className="w-full h-full object-cover"
-                                />
-                                <div className="absolute inset-0 bg-gradient-to-t from-[#0A0B14] via-[#0A0B14]/40 to-transparent pointer-events-none" />
-                              </div>
-                            ))}
-                        </div>
+                    <div className="flex flex-col flex-1">
+                      <div className="relative h-96 w-full shrink-0 group bg-black">
+                        {otherUser.ProfilePhotos?.length > 1 && (
+                          <>
+                            <button
+                              className="absolute left-4 top-1/2 -translate-y-1/2 z-30 p-2 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOtherUserPhotoIndex(prev => (prev - 1 + otherUser.ProfilePhotos.length) % otherUser.ProfilePhotos.length);
+                              }}
+                            >
+                              <ChevronLeft size={20} />
+                            </button>
+                            <button
+                              className="absolute right-4 top-1/2 -translate-y-1/2 z-30 p-2 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOtherUserPhotoIndex(prev => (prev + 1) % otherUser.ProfilePhotos.length);
+                              }}
+                            >
+                              <ChevronRight size={20} />
+                            </button>
+                          </>
+                        )}
+                        
+                        <AnimatePresence mode="wait">
+                          <motion.img
+                            key={otherUserPhotoIndex}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.3 }}
+                            src={
+                              getAssetUrl(
+                                (otherUser.ProfilePhotos?.length > 0
+                                  ? otherUser.ProfilePhotos
+                                  : [otherUser.Thumbnail || ""]
+                                )
+                                .filter(Boolean)[otherUserPhotoIndex] || ""
+                              ) ||
+                              "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=800"
+                            }
+                            className="absolute inset-0 w-full h-full object-contain"
+                          />
+                        </AnimatePresence>
+                        
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#0A0B14] via-[#0A0B14]/40 to-transparent pointer-events-none" />
 
                         <button
                           onClick={() => {
                             setShowInfo(false);
-                            setCurrentPhotoIndex(0);
+                            setOtherUserPhotoIndex(0);
                           }}
                           className="absolute top-6 right-6 w-10 h-10 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white/70 hover:text-white transition-colors border border-white/10 z-10"
                         >
@@ -947,7 +986,7 @@ export function ChatRoomPage() {
                                   key={idx}
                                   className={cn(
                                     "h-1.5 rounded-full transition-all duration-300",
-                                    currentPhotoIndex === idx
+                                    otherUserPhotoIndex === idx
                                       ? "w-4 bg-brand-accent shadow-[0_0_8px_rgba(33,212,253,0.5)]"
                                       : "w-1.5 bg-white/30",
                                   )}
@@ -958,7 +997,7 @@ export function ChatRoomPage() {
                         )}
                       </div>
 
-                      <div className="px-6 -mt-[13px] relative z-10 space-y-8 pb-32 pt-[16px]">
+                      <div className="px-6 relative z-10 space-y-8 pb-32 pt-8">
                         {/* Name & Bio */}
                         <div>
                           <h3 className="text-[10px] font-bold text-white/40 tracking-wider mb-0 uppercase pt-0 pl-0">
@@ -1094,7 +1133,7 @@ export function ChatRoomPage() {
                           </button>
                         </div>
                       </div>
-                    </>
+                    </div>
                   ) : (
                     <div className="flex-1 flex flex-col items-center justify-center p-10 opacity-20">
                       <p className="text-xs font-black uppercase tracking-[0.3em]">
@@ -1214,47 +1253,62 @@ export function ChatRoomPage() {
               transition={{ type: "spring", damping: 30, stiffness: 250 }}
               className="absolute inset-0 bg-[#0A0B14] z-[60] flex flex-col overflow-y-auto scrollbar-hide"
             >
-              <div className="relative h-96 w-full shrink-0 group">
-                <div
-                  className="w-full h-full flex overflow-x-auto snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                  onScroll={(e) => {
-                    const idx = Math.round(
-                      e.currentTarget.scrollLeft / e.currentTarget.offsetWidth,
-                    );
-                    setCurrentPhotoIndex(idx);
-                  }}
-                >
-                  {(selectedUser.ProfilePhotos?.length > 0
-                    ? selectedUser.ProfilePhotos
-                    : [selectedUser.Thumbnail || ""]
-                  )
-                    .filter(Boolean)
-                    .map((photo: string, idx: number) => (
-                      <div
-                        key={idx}
-                        className="w-full h-full flex-none snap-center relative"
-                      >
-                        <img
-                          src={
-                            getAssetUrl(photo) ||
-                            "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=800"
-                          }
-                          className="w-full h-full object-cover"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-[#0A0B14] via-[#0A0B14]/40 to-transparent pointer-events-none" />
-                      </div>
-                    ))}
-                </div>
+              <div className="relative h-96 w-full shrink-0 group bg-black">
+                {selectedUser.ProfilePhotos?.length > 1 && (
+                  <>
+                    <button
+                      className="absolute left-4 top-1/2 -translate-y-1/2 z-30 p-2 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedUserPhotoIndex(prev => (prev - 1 + selectedUser.ProfilePhotos.length) % selectedUser.ProfilePhotos.length);
+                      }}
+                    >
+                      <ChevronLeft size={20} />
+                    </button>
+                    <button
+                      className="absolute right-4 top-1/2 -translate-y-1/2 z-30 p-2 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedUserPhotoIndex(prev => (prev + 1) % selectedUser.ProfilePhotos.length);
+                      }}
+                    >
+                      <ChevronRight size={20} />
+                    </button>
+                  </>
+                )}
+                
+                <AnimatePresence mode="wait">
+                  <motion.img
+                    key={selectedUserPhotoIndex}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.3 }}
+                    src={
+                      getAssetUrl(
+                        (selectedUser.ProfilePhotos?.length > 0
+                          ? selectedUser.ProfilePhotos
+                          : [selectedUser.Thumbnail || ""]
+                        )
+                        .filter(Boolean)[selectedUserPhotoIndex] || ""
+                      ) ||
+                      "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=800"
+                    }
+                    className="absolute inset-0 w-full h-full object-contain"
+                  />
+                </AnimatePresence>
 
                 <button
                   onClick={() => {
                     setSelectedUser(null);
-                    setCurrentPhotoIndex(0);
+                    setSelectedUserPhotoIndex(0);
                   }}
                   className="absolute top-6 left-6 w-10 h-10 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white/70 hover:text-white transition-colors border border-white/10 z-10"
                 >
                   <ChevronLeft size={20} />
                 </button>
+
+                <div className="absolute inset-0 bg-gradient-to-t from-[#0A0B14] via-[#0A0B14]/40 to-transparent pointer-events-none" />
 
                 <div className="absolute bottom-6 right-6 z-20">
                   <div className="px-3 py-1.5 bg-black/80 backdrop-blur-md rounded-xl text-xs font-bold text-amber-400 flex items-center shadow-lg border border-white/5 uppercase">
@@ -1282,7 +1336,7 @@ export function ChatRoomPage() {
                         key={idx}
                         className={cn(
                           "h-1.5 rounded-full transition-all duration-300",
-                          currentPhotoIndex === idx
+                          selectedUserPhotoIndex === idx
                             ? "w-4 bg-brand-accent shadow-[0_0_8px_rgba(33,212,253,0.5)]"
                             : "w-1.5 bg-white/30",
                         )}
