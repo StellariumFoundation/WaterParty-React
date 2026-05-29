@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">WaterParty</string>
+    <string name="title_activity_main">WaterParty</string>
+    <string name="package_name">com.waterparty.app</string>
+    <string name="custom_url_scheme">com.waterparty.app</string>
+</resources>
