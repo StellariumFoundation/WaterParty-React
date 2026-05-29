@@ -5,7 +5,6 @@ export interface User {
   PhoneNumber: string;
   ProfilePhotos: string[];
   Age: number;
-  HeightCm: number;
   Gender: string;
   Bio: string;
   JobTitle: string;

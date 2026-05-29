@@ -970,7 +970,7 @@ export function ChatRoomPage() {
                         </div>
 
                         {/* Lifestyle */}
-                        {(otherUser.Gender || otherUser.HeightCm > 0) && (
+                        {(otherUser.Gender) && (
                           <section>
                             <h3 className="text-[10px] font-bold text-white/40 tracking-wider mb-3 uppercase">
                               Lifestyle
@@ -990,17 +990,6 @@ export function ChatRoomPage() {
                                     size={16}
                                     className="text-white/20"
                                   />
-                                </div>
-                              )}
-
-                              {otherUser.HeightCm > 0 && (
-                                <div className="grid grid-cols-2 gap-3">
-                                  <div className="bg-[#11131F] border border-white/5 rounded-2xl p-4 flex flex-col justify-center">
-                                    <span className="text-sm text-white font-medium flex items-center gap-2">
-                                      <span className="text-white/20">📏</span>{" "}
-                                      {otherUser.HeightCm} cm
-                                    </span>
-                                  </div>
                                 </div>
                               )}
                             </div>
@@ -1315,7 +1304,7 @@ export function ChatRoomPage() {
                 </div>
 
                 {/* Lifestyle */}
-                {(selectedUser.Gender || selectedUser.HeightCm > 0) && (
+                {(selectedUser.Gender) && (
                   <section>
                     <h3 className="text-[10px] font-bold text-white/40 tracking-wider mb-3 uppercase">
                       Lifestyle
@@ -1332,20 +1321,6 @@ export function ChatRoomPage() {
                             </span>
                           </div>
                           <UserIcon size={16} className="text-white/20" />
-                        </div>
-                      )}
-
-                      {selectedUser.HeightCm > 0 && (
-                        <div className="bg-[#11131F] border border-white/5 rounded-2xl p-4 flex items-center justify-between">
-                          <div className="flex flex-col">
-                            <span className="text-[10px] text-white/40 mb-1">
-                              Height
-                            </span>
-                            <span className="text-sm text-white font-medium uppercase">
-                              {selectedUser.HeightCm} cm
-                            </span>
-                          </div>
-                          <span className="text-white/20">📏</span>
                         </div>
                       )}
                     </div>

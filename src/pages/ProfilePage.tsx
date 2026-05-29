@@ -19,7 +19,6 @@ export function ProfilePage() {
     Instagram: '',
     Twitter: '',
     Gender: '',
-    HeightCm: 0,
     JobTitle: '',
     Company: '',
     School: '',
@@ -37,7 +36,6 @@ export function ProfilePage() {
       Instagram: user.Instagram || '',
       Twitter: user.Twitter || '',
       Gender: user.Gender || '',
-      HeightCm: user.HeightCm || 0,
       JobTitle: user.JobTitle || '',
       Company: user.Company || '',
       School: user.School || '',
@@ -256,15 +254,6 @@ export function ProfilePage() {
                          <option value="Other">Other</option>
                        </select>
                      </div>
-                     <div>
-                       <label className="text-[10px] font-bold text-white/40 tracking-wider mb-2 uppercase block">Height (cm)</label>
-                       <input 
-                         type="number" 
-                         value={editData.HeightCm}
-                         onChange={(e) => setEditData({...editData, HeightCm: Number(e.target.value)})}
-                         className="w-full bg-[#11131F] border border-white/10 rounded-xl px-4 py-3 text-white focus:border-brand-primary outline-none transition-colors"
-                       />
-                     </div>
                  </div>
 
                  <div className="grid grid-cols-2 gap-4">
@@ -343,7 +332,7 @@ export function ProfilePage() {
          </div>
 
          {/* Lifestyle */}
-         {!isEditing && (user.Gender || user.HeightCm > 0) && (
+         {!isEditing && (user.Gender) && (
            <section>
               <h3 className="text-[10px] font-bold text-white/40 tracking-wider mb-3 uppercase">Lifestyle</h3>
               <div className="space-y-3">
@@ -355,14 +344,6 @@ export function ProfilePage() {
                          <span className="text-sm text-white font-medium uppercase">{user.Gender}</span>
                       </div>
                       <UserIcon size={16} className="text-white/20" />
-                   </div>
-                 )}
-
-                 {user.HeightCm > 0 && (
-                   <div className="grid grid-cols-2 gap-3">
-                       <div className="bg-[#11131F] border border-white/5 rounded-2xl p-4 flex flex-col justify-center">
-                         <span className="text-sm text-white font-medium flex items-center gap-2"><span className="text-white/20">📏</span> {user.HeightCm} cm</span>
-                      </div>
                    </div>
                  )}
 

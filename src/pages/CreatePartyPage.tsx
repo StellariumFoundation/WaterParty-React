@@ -251,7 +251,7 @@ export function CreatePartyPage() {
 
   return (
     <div className="h-full w-full bg-transparent flex flex-col overflow-y-auto py-6 scrollbar-hide pb-28">
-      <div className="w-full flex flex-col">
+      <div className="w-full px-3 flex flex-col">
         
         {/* TILE HEADER */}
         <div className="mb-4">

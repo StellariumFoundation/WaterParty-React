@@ -108,7 +108,7 @@ export function AuthPage() {
   };
 
   return (
-    <div className="min-h-[100dvh] w-full flex flex-col items-center justify-center p-6 bg-[#090A10] text-white absolute inset-0 z-[100] overflow-y-auto">
+    <div className="min-h-[100dvh] w-full flex flex-col items-center justify-center p-6 bg-gradient-to-br from-[#1e1b4b] to-[#0f172a] text-white absolute inset-0 z-[100] overflow-y-auto">
       {/* Background Premium Ambient Glows */}
       <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-brand-accent/15 blur-[120px] pointer-events-none animate-pulse" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-brand-secondary/15 blur-[120px] pointer-events-none animate-pulse" />

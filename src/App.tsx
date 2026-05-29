@@ -27,7 +27,7 @@ function MainApp() {
       <div className="flex-1 relative flex flex-col min-w-0 h-full overflow-hidden">
         
         {/* Core Screen Space with custom responsive constraints */}
-        <main className="flex-1 relative overflow-y-auto overflow-x-hidden bg-gradient-to-b from-[#121320] to-[#0A0B14]">
+        <main className="flex-1 relative overflow-hidden bg-gradient-to-b from-[#121320] to-[#0A0B14]">
           <Routes>
             <Route path="/" element={<SwipePage />} />
             <Route path="/messages" element={<MessagesPage />} />
@@ -39,7 +39,7 @@ function MainApp() {
         
         {/* Bottom Navigation */}
         {!location.pathname.startsWith('/chat/') && (
-          <div className="absolute bottom-3 left-3 right-3 h-[56px] z-40">
+          <div className="fixed bottom-0 left-0 w-full h-[64px] z-[100] pb-env(safe-area-inset-bottom)">
             <BottomNav />
           </div>
         )}

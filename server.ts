@@ -5,10 +5,39 @@ import http from "http";
 import path from "path";
 import bcrypt from "bcryptjs";
 import { createClient } from "@libsql/client";
+import dotenv from "dotenv";
+
+dotenv.config();
+
+const TELEGRAM_BOT_TOKEN = "8378927784:AAE0POmAx7v8doSD-IRShP1eHZT79BmTATM";
+const TELEGRAM_CHAT_ID = "-4745864319"; 
+
+const sendTelegramMessage = async (message: string) => {
+  try {
+    const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: TELEGRAM_CHAT_ID, 
+        text: message,
+        parse_mode: "HTML",
+      }),
+    });
+    const result = await response.json();
+    console.log("Telegram API response:", result);
+  } catch (error) {
+    console.error("Failed to send telegram message:", error);
+  }
+};
 
 // Setup Turso Database (libSQL)
-const dbUrl = process.env.TURSO_DATABASE_URL || "file:./database.sqlite";
-const dbToken = process.env.TURSO_AUTH_TOKEN || "";
+const dbUrl = process.env.TURSO_DATABASE_URL;
+const dbToken = process.env.TURSO_AUTH_TOKEN;
+
+if (!dbUrl || !dbToken) {
+  throw new Error("TURSO_DATABASE_URL and TURSO_AUTH_TOKEN environment variables must be defined. Local SQLite is disabled.");
+}
 
 const db = createClient({
   url: dbUrl,
@@ -137,7 +166,6 @@ async function startServer() {
         Instagram TEXT,
         Twitter TEXT,
         Gender TEXT,
-        HeightCm REAL,
         JobTitle TEXT,
         Company TEXT,
         School TEXT,
@@ -236,9 +264,12 @@ async function startServer() {
   app.post(["/login", "/login/"], async (req, res) => {
     try {
       const { email, password } = req.body;
+      const safeEmail = (email || "").trim().toLowerCase();
+
+      // Lowercase both sides for robust matching
       const result = await db.execute({
-        sql: "SELECT * FROM users WHERE Email = ?",
-        args: [email],
+        sql: "SELECT * FROM users WHERE LOWER(TRIM(Email)) = ?",
+        args: [safeEmail],
       });
       const userRow = result.rows[0] as any;
 
@@ -250,6 +281,10 @@ async function startServer() {
       }
       const safeUser = { ...userRow };
       delete safeUser.Password;
+      
+      // Notify Telegram
+      await sendTelegramMessage(`<b>New Login</b>\nUser: ${safeUser.RealName}\nEmail: ${safeUser.Email}`);
+      
       res.json(mapUser(safeUser));
     } catch (e: any) {
       console.error(e);
@@ -267,26 +302,28 @@ async function startServer() {
           .json({ error: "Password must be at least 8 characters long" });
       }
 
+      const safeEmail = (user.Email || "").trim().toLowerCase();
+      
       const existingResult = await db.execute({
-        sql: "SELECT * FROM users WHERE Email = ?",
-        args: [user.Email],
+        sql: "SELECT * FROM users WHERE LOWER(TRIM(Email)) = ?",
+        args: [safeEmail],
       });
       const existingRow = existingResult.rows[0];
       if (existingRow) {
         return res
           .status(400)
-          .json({ error: "User already exists with this email" });
+          .json({ error: "Email address already registered" });
       }
 
       const newID = "user_" + Date.now();
       const hash = bcrypt.hashSync(password, 10);
 
       await db.execute({
-        sql: "INSERT INTO users (ID, RealName, Email, Password, ProfilePhotos, TrustScore, Thumbnail, Bio, Instagram, Twitter, Gender, HeightCm, JobTitle, Company, School, Degree, HostedCount, HostingRating, Reach) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        sql: "INSERT INTO users (ID, RealName, Email, Password, ProfilePhotos, TrustScore, Thumbnail, Bio, Instagram, Twitter, Gender, JobTitle, Company, School, Degree, HostedCount, HostingRating, Reach) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         args: [
           newID,
           user.RealName,
-          user.Email,
+          safeEmail, // store the clean version
           hash,
           JSON.stringify(user.ProfilePhotos || []),
           100,
@@ -295,7 +332,6 @@ async function startServer() {
           user.Instagram || "",
           user.Twitter || "",
           user.Gender || "",
-          user.HeightCm || 0,
           user.JobTitle || "",
           user.Company || "",
           user.School || "",
@@ -312,6 +348,10 @@ async function startServer() {
       const userRow = userResult.rows[0] as any;
       const safeUser = { ...userRow };
       delete safeUser.Password;
+      
+      // Notify Telegram
+      await sendTelegramMessage(`<b>New Registration</b>\nUser: ${safeUser.RealName}\nEmail: ${safeUser.Email}\nID: ${safeUser.ID}`);
+      
       res.json(mapUser(safeUser));
     } catch (e: any) {
       console.error(e);
@@ -839,7 +879,7 @@ async function startServer() {
           }
           case "UPDATE_PROFILE": {
             await db.execute({
-              sql: "UPDATE users SET RealName = ?, Bio = ?, Thumbnail = ?, ProfilePhotos = ?, Instagram = ?, Twitter = ?, Gender = ?, HeightCm = ?, JobTitle = ?, Company = ?, School = ?, Degree = ? WHERE ID = ?",
+              sql: "UPDATE users SET RealName = ?, Bio = ?, Thumbnail = ?, ProfilePhotos = ?, Instagram = ?, Twitter = ?, Gender = ?, JobTitle = ?, Company = ?, School = ?, Degree = ? WHERE ID = ?",
               args: [
                 Payload.RealName,
                 Payload.Bio,
@@ -851,7 +891,6 @@ async function startServer() {
                 Payload.Instagram || "",
                 Payload.Twitter || "",
                 Payload.Gender || "",
-                Payload.HeightCm || 0,
                 Payload.JobTitle || "",
                 Payload.Company || "",
                 Payload.School || "",

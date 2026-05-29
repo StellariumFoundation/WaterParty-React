@@ -16,7 +16,7 @@ export function BottomNav() {
   ];
 
   return (
-    <div className="w-full h-full bg-[#0E0F15]/95 flex items-center justify-around px-2 z-50 border border-white/5 backdrop-blur-md rounded-2xl shadow-xl">
+    <div className="w-full h-full bg-[#0A0B14]/95 flex items-center justify-around px-2 z-50 border-t border-white/5 backdrop-blur-xl shadow-[0_-8px_30px_rgba(0,0,0,0.5)]">
       {navItems.map((item) => {
         const isActive = location.pathname === item.path;
         const Icon = item.icon;

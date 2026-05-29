@@ -1,14 +1,11 @@
-export const HOST = window.location.host;
+export const HOST = typeof window !== 'undefined' ? window.location.host : '';
 
 const isBrowser = typeof window !== 'undefined' && window.location;
 
-const PRODUCTION_URL = (isBrowser && window.location.origin && !window.location.origin.includes('localhost') && !window.location.origin.includes('127.0.0.1'))
-  ? window.location.origin
-  : 'https://waterparty-react.onrender.com';
+// Use relative paths to avoid CORS issues if hosted on the same domain
+export const API_BASE = '';
 
-export const API_BASE = PRODUCTION_URL;
-
-export const WS_BASE = PRODUCTION_URL.replace('http', 'ws') + '/ws';
+export const WS_BASE = (isBrowser ? (window.location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + window.location.host + '/ws' : '/ws');
 
 export const getAssetUrl = (url: string) => {
   if (!url) return 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?q=80&w=1000';

@@ -174,7 +174,7 @@ export function SwipePage() {
   };
 
   return (
-    <div className="relative h-full flex flex-col bg-[#050505] overflow-hidden pt-2.5 mx-3">
+    <div className="relative h-full w-full flex flex-col bg-[#050505] overflow-hidden">
       {/* Header - Floating over the cards */}
       <header className="absolute top-0 left-0 right-0 px-6 pt-8 pb-4 flex justify-between items-center z-40 bg-gradient-to-b from-black/60 to-transparent pointer-events-none">
         <div className="text-2xl font-black bg-gradient-to-r from-brand-primary to-brand-secondary text-transparent bg-clip-text tracking-tighter pointer-events-auto">
@@ -791,7 +791,7 @@ export function SwipePage() {
               </div>
 
               {/* Lifestyle */}
-              {(selectedUser.Gender || selectedUser.HeightCm > 0) && (
+              {(selectedUser.Gender) && (
                 <section>
                   <h3 className="text-[10px] font-bold text-white/40 tracking-wider mb-3 uppercase">
                     Lifestyle
@@ -808,20 +808,6 @@ export function SwipePage() {
                           </span>
                         </div>
                         <UserIcon size={16} className="text-white/20" />
-                      </div>
-                    )}
-
-                    {selectedUser.HeightCm > 0 && (
-                      <div className="bg-[#11131F] border border-white/5 rounded-2xl p-4 flex items-center justify-between">
-                        <div className="flex flex-col">
-                          <span className="text-[10px] text-white/40 mb-1">
-                            Height
-                          </span>
-                          <span className="text-sm text-white font-medium uppercase">
-                            {selectedUser.HeightCm} cm
-                          </span>
-                        </div>
-                        <span className="text-white/20">📏</span>
                       </div>
                     )}
                   </div>
