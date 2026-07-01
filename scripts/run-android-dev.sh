@@ -18,7 +18,7 @@ cd "$SCRIPT_DIR"
 
 # ─── Config ────────────────────────────────────────────────────────────────
 
-JAVA_HOME_PATH="/c/Program Files/Android/Android Studio/jbr"
+JAVA_HOME_PATH="${JAVA_HOME:-/c/Program Files/Android/Android Studio/jbr}"
 ANDROID_SDK_PATH="/c/Users/John Victor/AppData/Local/Android/Sdk"
 DEV_SERVER_PORT=3000
 
